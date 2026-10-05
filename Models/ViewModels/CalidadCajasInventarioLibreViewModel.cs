@@ -32,6 +32,16 @@ namespace ERP.NSQuell.Models.ViewModels
 
         public string Estado { get; set; } = string.Empty;
 
+        public string? TipoEtiqueta { get; set; }
+
+        public bool RequiereGP12 { get; set; }
+
+        public int? GP12SolicitudID { get; set; }
+
+        public long? ScrapRegistroID { get; set; }
+
+        public DateTime? FechaClasificacion { get; set; }
+
         public DateTime FechaEscaneoCalidad { get; set; }
 
         public DateTime? FechaEnvioAlmacen { get; set; }
@@ -41,6 +51,14 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? NumeroParteCatalogo { get; set; }
 
         public string? DescripcionCatalogo { get; set; }
+
+        public bool PuedeClasificarse =>
+            string.Equals(
+                Estado,
+                "EN_CALIDAD",
+                StringComparison.OrdinalIgnoreCase)
+            && !GP12SolicitudID.HasValue
+            && !ScrapRegistroID.HasValue;
     }
 
     public class CalidadCajaUbicacionVm

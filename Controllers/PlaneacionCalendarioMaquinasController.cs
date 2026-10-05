@@ -1746,7 +1746,7 @@ CROSS APPLY
         CASE
             WHEN pp.FechaInicioReal IS NOT NULL
                 THEN pp.FechaInicioReal
-            WHEN pe.EstatusID IN(@EnProduccion,@Pausado,@TerminadoParcial,@Terminado,@Cerrado)
+            WHEN pe.EstatusID IN(@EnPreparacion,@EnProduccion,@Pausado,@TerminadoParcial,@Terminado,@Cerrado) -- NSQ_CALENDARIO_DESFASE_DESDE_PREPARACION_V1_3
              AND pe.FechaInicioReal IS NOT NULL
                 THEN pe.FechaInicioReal
             ELSE NULL
@@ -1859,6 +1859,7 @@ ORDER BY
                 cmd.Parameters.Add("@Inicio", SqlDbType.DateTime).Value = inicio;
                 cmd.Parameters.Add("@Fin", SqlDbType.DateTime).Value = fin;
                 cmd.Parameters.Add("@EstatusCancelado", SqlDbType.Int).Value = EstatusPrograma.Cancelado;
+                cmd.Parameters.Add("@EnPreparacion", SqlDbType.Int).Value = EstatusPrograma.EnPreparacion;
                 cmd.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = EstatusPrograma.EnProduccion;
                 cmd.Parameters.Add("@Pausado", SqlDbType.Int).Value = EstatusPrograma.Pausado;
                 cmd.Parameters.Add("@TerminadoParcial", SqlDbType.Int).Value = EstatusPrograma.TerminadoParcial;

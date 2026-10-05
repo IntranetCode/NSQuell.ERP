@@ -1,4 +1,4 @@
-@model ERP.NSQuell.Models.GP12IndexViewModel
+﻿@model ERP.NSQuell.Models.GP12IndexViewModel
 @using ERP.NSQuell.Models
 
 @{
@@ -1849,6 +1849,17 @@
     <!-- ======================================================
          FLUJO VISUAL
          ====================================================== -->
+
+        @{
+        var recepcionCalidadRapida =
+            ViewBag.RecepcionCalidadRapida
+            as ERP.NSQuell.Models.ViewModels.GP12RecepcionCalidadVm
+            ?? new ERP.NSQuell.Models.ViewModels.GP12RecepcionCalidadVm();
+    }
+
+    @await Html.PartialAsync(
+        "_RecepcionCalidadRapida",
+        recepcionCalidadRapida)
 
     <section class="flow-shell">
 

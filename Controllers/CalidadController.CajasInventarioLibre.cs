@@ -383,6 +383,11 @@ SELECT TOP(500)
     c.Cantidad,
     c.LoteEtiqueta,
     c.Estado,
+    c.TipoEtiqueta,
+    ISNULL(c.RequiereGP12,0) AS RequiereGP12,
+    c.GP12SolicitudID,
+    c.ScrapRegistroID,
+    c.FechaClasificacion,
     c.FechaEscaneoCalidad,
     c.FechaEnvioAlmacen,
     c.AlmacenPTCajaID,
@@ -473,6 +478,33 @@ ORDER BY
                             Estado=
                                 rd["Estado"]?.ToString()?.Trim()
                                 ?? string.Empty,
+
+                            TipoEtiqueta=
+                                rd["TipoEtiqueta"]==DBNull.Value
+                                    ? null
+                                    : rd["TipoEtiqueta"]?.ToString()?.Trim(),
+
+                            RequiereGP12=
+                                Convert.ToBoolean(
+                                    rd["RequiereGP12"]),
+
+                            GP12SolicitudID=
+                                rd["GP12SolicitudID"]==DBNull.Value
+                                    ? null
+                                    : Convert.ToInt32(
+                                        rd["GP12SolicitudID"]),
+
+                            ScrapRegistroID=
+                                rd["ScrapRegistroID"]==DBNull.Value
+                                    ? null
+                                    : Convert.ToInt64(
+                                        rd["ScrapRegistroID"]),
+
+                            FechaClasificacion=
+                                rd["FechaClasificacion"]==DBNull.Value
+                                    ? null
+                                    : Convert.ToDateTime(
+                                        rd["FechaClasificacion"]),
 
                             FechaEscaneoCalidad=
                                 Convert.ToDateTime(

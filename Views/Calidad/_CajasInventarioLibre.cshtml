@@ -1,164 +1,423 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.CalidadCajasInventarioLibreVm
 
+@{
+    var activas = Model.Items
+        .Where(x => !string.Equals(x.Estado, "ENVIADA_ALMACEN", StringComparison.OrdinalIgnoreCase)
+                 && !string.Equals(x.Estado, "CANCELADA", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    var seleccionables = Model.Items.Count(x => x.PuedeClasificarse);
+    var pendientesClasificar = Model.Items.Count(x => x.PuedeClasificarse && string.IsNullOrWhiteSpace(x.TipoEtiqueta));
+    var verdes = Model.Items.Count(x => string.Equals(x.TipoEtiqueta, "VERDE", StringComparison.OrdinalIgnoreCase));
+    var amarillas = Model.Items.Count(x => string.Equals(x.TipoEtiqueta, "AMARILLA", StringComparison.OrdinalIgnoreCase));
+    var rojas = Model.Items.Count(x => string.Equals(x.TipoEtiqueta, "ROJA", StringComparison.OrdinalIgnoreCase));
+    var blancas = Model.Items.Count(x => string.Equals(x.TipoEtiqueta, "BLANCA", StringComparison.OrdinalIgnoreCase));
+}
+
+<style>
+    #cajas-inventario-libre .qbox-kpis {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(115px, 1fr));
+        gap: .65rem;
+        padding: 1rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    #cajas-inventario-libre .qbox-kpi {
+        border: 1px solid #e6e9ee;
+        border-radius: .8rem;
+        padding: .75rem .9rem;
+        background: #fff;
+    }
+
+    #cajas-inventario-libre .qbox-kpi small {
+        display: block;
+        color: #6c757d;
+        font-size: .76rem;
+        margin-bottom: .1rem;
+    }
+
+    #cajas-inventario-libre .qbox-kpi strong {
+        font-size: 1.3rem;
+        line-height: 1;
+    }
+
+    #cajas-inventario-libre .qbox-scan-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+        gap: 1rem;
+        padding: 1rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    #cajas-inventario-libre .qbox-panel {
+        border: 1px solid #e6e9ee;
+        border-radius: .9rem;
+        background: #fff;
+        padding: 1rem;
+    }
+
+    #cajas-inventario-libre .qbox-scan-input {
+        font-size: 1.05rem;
+        min-height: 48px;
+    }
+
+    #cajas-inventario-libre .qbox-scan-list {
+        margin-top: .75rem;
+        max-height: 210px;
+        overflow: auto;
+        display: grid;
+        gap: .45rem;
+    }
+
+    #cajas-inventario-libre .qbox-scan-row {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr) 38px;
+        gap: .4rem;
+        align-items: center;
+        border: 1px solid #edf0f3;
+        border-radius: .55rem;
+        padding: .35rem .45rem;
+        background: #fafbfc;
+    }
+
+    #cajas-inventario-libre .qbox-scan-row code {
+        color: inherit;
+        overflow-wrap: anywhere;
+        white-space: normal;
+    }
+
+    #cajas-inventario-libre .qbox-classification-buttons {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(120px, 1fr));
+        gap: .65rem;
+    }
+
+    #cajas-inventario-libre .qbox-label-btn {
+        border: 2px solid transparent;
+        border-radius: .85rem;
+        padding: .8rem .7rem;
+        font-weight: 700;
+        min-height: 58px;
+        transition: transform .08s ease, box-shadow .08s ease, border-color .08s ease;
+    }
+
+    #cajas-inventario-libre .qbox-label-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    #cajas-inventario-libre .qbox-label-btn.is-selected {
+        border-color: #212529;
+        box-shadow: 0 0 0 3px rgba(33,37,41,.12);
+    }
+
+    #cajas-inventario-libre .qbox-label-green { background: #d1e7dd; color: #0f5132; }
+    #cajas-inventario-libre .qbox-label-yellow { background: #fff3cd; color: #664d03; }
+    #cajas-inventario-libre .qbox-label-red { background: #f8d7da; color: #842029; }
+    #cajas-inventario-libre .qbox-label-white { background: #fff; color: #212529; border-color: #ced4da; }
+
+    #cajas-inventario-libre .qbox-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        border-radius: 999px;
+        padding: .28rem .62rem;
+        font-size: .78rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    #cajas-inventario-libre .qbox-tag-green { background: #d1e7dd; color: #0f5132; }
+    #cajas-inventario-libre .qbox-tag-yellow { background: #fff3cd; color: #664d03; }
+    #cajas-inventario-libre .qbox-tag-red { background: #f8d7da; color: #842029; }
+    #cajas-inventario-libre .qbox-tag-white { background: #f8f9fa; color: #212529; border: 1px solid #ced4da; }
+    #cajas-inventario-libre .qbox-tag-neutral { background: #e9ecef; color: #495057; }
+
+    #cajas-inventario-libre .qbox-bulk-bar {
+        position: sticky;
+        top: .5rem;
+        z-index: 5;
+        border: 1px solid #dfe3e7;
+        border-radius: .9rem;
+        margin: 1rem;
+        padding: 1rem;
+        background: rgba(255,255,255,.98);
+        box-shadow: 0 .35rem 1rem rgba(0,0,0,.05);
+    }
+
+    @@media (max-width: 1100px) {
+        #cajas-inventario-libre .qbox-kpis { grid-template-columns: repeat(3, minmax(110px, 1fr)); }
+        #cajas-inventario-libre .qbox-scan-grid { grid-template-columns: 1fr; }
+    }
+
+    @@media (max-width: 720px) {
+        #cajas-inventario-libre .qbox-kpis { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
+        #cajas-inventario-libre .qbox-classification-buttons { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+    }
+</style>
+
 <section class="quality-list-card mb-4" id="cajas-inventario-libre">
     <div class="quality-list-header">
         <div>
             <h2>
-                <i class="fa-solid fa-barcode"></i>
-                Inventario libre de cajas en Calidad
+                <i class="fa-solid fa-boxes-stacked"></i>
+                Clasificación rápida de cajas
             </h2>
             <div class="quality-help">
-                Escanea varias etiquetas y conviértelas con la misma estructura usada por Almacén PT.
-                No se exige que la caja esté ligada a una ejecución/OF del ERP ni que corresponda a una caja completa.
+                Escanea cajas en lote y clasifícalas desde una sola pantalla. Calidad define la etiqueta;
+                Almacén PT define la ubicación cuando recibe físicamente una caja verde.
             </div>
         </div>
 
         <span class="quality-result-count">
-            <i class="fa-solid fa-boxes-stacked"></i>
-            @Model.TotalCajas caja(s) · @Model.TotalPiezas.ToString("N0") pieza(s)
+            <i class="fa-solid fa-barcode"></i>
+            @activas.Count caja(s) activas
         </span>
     </div>
 
-    <div class="p-3 p-lg-4 border-bottom">
-        <form asp-controller="Calidad"
-              asp-action="RegistrarCajasInventarioLibre"
-              method="post"
-              id="formCajasInventarioLibre">
-            @Html.AntiForgeryToken()
-
-            <label class="form-label fw-bold">
-                Etiquetas a escanear
-            </label>
-
-            <textarea name="codigosEscaneados"
-                      id="codigosCajasInventarioLibre"
-                      rows="7"
-                      class="form-control"
-                      autocomplete="off"
-                      placeholder="Escanea una etiqueta por línea..."></textarea>
-
-            <div class="d-flex gap-2 flex-wrap mt-3">
-                <button type="button"
-                        class="quality-btn quality-btn-light"
-                        id="btnConvertirCajasInventarioLibre">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                    Convertir etiquetas
-                </button>
-
-                <button type="submit"
-                        class="quality-btn quality-btn-primary">
-                    <i class="fa-solid fa-box-archive"></i>
-                    Registrar en inventario de Calidad
-                </button>
-            </div>
-        </form>
-
-        <div id="resultadoConversionCajasInventarioLibre"
-             class="mt-3"
-             hidden>
+    <div class="qbox-kpis">
+        <div class="qbox-kpi">
+            <small>Por clasificar</small>
+            <strong>@pendientesClasificar</strong>
+        </div>
+        <div class="qbox-kpi">
+            <small>Verdes</small>
+            <strong>@verdes</strong>
+        </div>
+        <div class="qbox-kpi">
+            <small>Amarillas</small>
+            <strong>@amarillas</strong>
+        </div>
+        <div class="qbox-kpi">
+            <small>Rojas / Scrap</small>
+            <strong>@rojas</strong>
+        </div>
+        <div class="qbox-kpi">
+            <small>Blancas / incompletas</small>
+            <strong>@blancas</strong>
+        </div>
+        <div class="qbox-kpi">
+            <small>Disponibles para decisión</small>
+            <strong>@seleccionables</strong>
         </div>
     </div>
 
-    <form asp-controller="Calidad"
-          asp-action="EnviarCajasInventarioLibreAlmacen"
-          method="post">
-        @Html.AntiForgeryToken()
-
-        <div class="p-3 border-bottom bg-light">
-            <div class="row g-2 align-items-end">
-                <div class="col-lg-7">
-                    <label class="form-label fw-bold">
-                        Ubicación destino en Almacén PT
-                    </label>
-
-                    <select name="ubicacionId"
-                            class="form-select"
-                            required>
-                        <option value="">
-                            -- Selecciona ubicación --
-                        </option>
-
-                        @foreach (var ubicacion in Model.Ubicaciones)
-                        {
-                            <option value="@ubicacion.UbicacionID">
-                                @ubicacion.Texto
-                            </option>
-                        }
-                    </select>
+    <div class="qbox-scan-grid">
+        <div class="qbox-panel">
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                    <h3 class="h6 fw-bold mb-1">
+                        <i class="fa-solid fa-barcode"></i>
+                        1. Escanear cajas
+                    </h3>
+                    <div class="quality-help">
+                        El cursor permanece listo. ENTER o TAB agrega la etiqueta y prepara el siguiente escaneo.
+                    </div>
                 </div>
+                <span class="badge bg-secondary" id="qboxScanCount">0</span>
+            </div>
 
-                <div class="col-lg-5 text-lg-end">
+            <form asp-controller="Calidad"
+                  asp-action="RegistrarCajasInventarioLibre"
+                  method="post"
+                  id="formCajasInventarioLibre">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden"
+                       name="codigosEscaneados"
+                       id="codigosCajasInventarioLibre" />
+
+                <input type="text"
+                       id="qboxScanInput"
+                       class="form-control qbox-scan-input"
+                       autocomplete="off"
+                       inputmode="none"
+                       autofocus
+                       placeholder="Escanea aquí la siguiente etiqueta..." />
+
+                <div class="qbox-scan-list" id="qboxScanList"></div>
+
+                <div class="d-flex gap-2 flex-wrap mt-3">
+                    <button type="button"
+                            class="quality-btn quality-btn-light"
+                            id="btnConvertirCajasInventarioLibre"
+                            disabled>
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        Validar lote
+                    </button>
+
                     <button type="submit"
-                            class="quality-btn quality-btn-primary">
-                        <i class="fa-solid fa-truck-ramp-box"></i>
-                        Enviar seleccionadas a Almacén PT
+                            class="quality-btn quality-btn-primary"
+                            id="qboxRegisterButton"
+                            disabled>
+                        <i class="fa-solid fa-box-archive"></i>
+                        Registrar lote en Calidad
+                    </button>
+
+                    <button type="button"
+                            class="quality-btn quality-btn-light"
+                            id="qboxClearButton"
+                            disabled>
+                        <i class="fa-solid fa-eraser"></i>
+                        Limpiar
                     </button>
                 </div>
-            </div>
+            </form>
 
-            <div class="quality-help mt-2">
-                Al enviar se crea la caja real de Almacén PT y su movimiento de entrada.
-                SolicitudProduccionID queda NULL; la OF de la etiqueta es solo trazabilidad.
-            </div>
+            <div id="resultadoConversionCajasInventarioLibre"
+                 class="mt-3"
+                 hidden></div>
         </div>
 
-        @if (!Model.Items.Any())
-        {
-            <div class="quality-empty">
-                <div class="quality-empty-icon">
-                    <i class="fa-solid fa-box-open"></i>
+        <div class="qbox-panel">
+            <h3 class="h6 fw-bold mb-2">
+                <i class="fa-solid fa-circle-info"></i>
+                Flujo de la etiqueta
+            </h3>
+
+            <div class="small d-grid gap-2">
+                <div><span class="qbox-tag qbox-tag-green">VERDE</span> Liberada por Calidad → pendiente de recepción física en Almacén PT.</div>
+                <div><span class="qbox-tag qbox-tag-yellow">AMARILLA</span> Se queda en Calidad; opcionalmente puede enviarse a GP12.</div>
+                <div><span class="qbox-tag qbox-tag-red">ROJA</span> Scrap → se genera recepción pendiente en el flujo de Almacén Scrap.</div>
+                <div><span class="qbox-tag qbox-tag-white">BLANCA</span> Producto incompleto → permanece inventariado en Calidad.</div>
+            </div>
+
+            <div class="alert alert-light border mt-3 mb-0 small">
+                <strong>Importante:</strong> Calidad ya no selecciona rack, nivel ni posición de Almacén PT.
+                Esa ubicación se registra cuando Almacén recibe la caja verde con su propio escáner.
+            </div>
+        </div>
+    </div>
+
+    @if (!Model.Items.Any())
+    {
+        <div class="quality-empty">
+            <div class="quality-empty-icon">
+                <i class="fa-solid fa-box-open"></i>
+            </div>
+            <h3>No hay cajas registradas</h3>
+            <p>Escanea el primer lote para comenzar la clasificación.</p>
+        </div>
+    }
+    else
+    {
+        <form asp-controller="Calidad"
+              asp-action="ClasificarCajasInventarioLibre"
+              method="post"
+              id="qboxClassificationForm">
+            @Html.AntiForgeryToken()
+
+            <input type="hidden" name="tipoEtiqueta" id="qboxTipoEtiqueta" />
+
+            <div class="qbox-bulk-bar">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="qboxSelectAll" />
+                        <label class="form-check-label fw-bold" for="qboxSelectAll">
+                            Seleccionar todas las disponibles
+                        </label>
+                    </div>
+
+                    <div class="small text-muted">
+                        <span id="qboxSelectedCount">0</span> caja(s) seleccionada(s)
+                    </div>
                 </div>
 
-                <h3>No hay cajas en el inventario libre</h3>
+                <div class="qbox-classification-buttons mb-3" role="group" aria-label="Tipo de etiqueta">
+                    <button type="button" class="qbox-label-btn qbox-label-green" data-qbox-type="VERDE">
+                        <i class="fa-solid fa-circle-check"></i> VERDE
+                    </button>
+                    <button type="button" class="qbox-label-btn qbox-label-yellow" data-qbox-type="AMARILLA">
+                        <i class="fa-solid fa-triangle-exclamation"></i> AMARILLA
+                    </button>
+                    <button type="button" class="qbox-label-btn qbox-label-red" data-qbox-type="ROJA">
+                        <i class="fa-solid fa-ban"></i> ROJA / SCRAP
+                    </button>
+                    <button type="button" class="qbox-label-btn qbox-label-white" data-qbox-type="BLANCA">
+                        <i class="fa-regular fa-square"></i> BLANCA / INCOMPLETA
+                    </button>
+                </div>
 
-                <p>
-                    Escanea etiquetas para registrarlas en Calidad.
-                </p>
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-3">
+                        <div class="form-check form-switch" id="qboxGp12Wrap" hidden>
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   role="switch"
+                                   name="llevarGP12"
+                                   value="true"
+                                   id="qboxGp12" />
+                            <label class="form-check-label fw-bold" for="qboxGp12">
+                                Llevar a GP12
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <label for="qboxObservaciones" class="form-label fw-bold mb-1">
+                            Motivo / observaciones
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               maxlength="500"
+                               name="observaciones"
+                               id="qboxObservaciones"
+                               placeholder="Opcional; obligatorio si se envía una amarilla a GP12" />
+                    </div>
+
+                    <div class="col-lg-3 text-lg-end">
+                        <button type="submit"
+                                class="quality-btn quality-btn-primary w-100"
+                                id="qboxApplyButton">
+                            <i class="fa-solid fa-bolt"></i>
+                            Aplicar clasificación
+                        </button>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning mt-3 mb-0 py-2"
+                     id="qboxClassificationMessage"
+                     hidden></div>
             </div>
-        }
-        else
-        {
+
             <div class="quality-table-wrap">
                 <table class="quality-table">
                     <thead>
                         <tr>
-                            <th style="width:55px;">Sel.</th>
-                            <th>Etiqueta</th>
+                            <th style="width:54px;">Sel.</th>
+                            <th>Caja / etiqueta</th>
                             <th>Parte</th>
-                            <th>OF etiqueta</th>
-                            <th>Designación</th>
-                            <th>Cantidad</th>
-                            <th>Lote / caja</th>
-                            <th>Estado</th>
-                            <th>Fecha</th>
+                            <th>OF</th>
+                            <th>Piezas</th>
+                            <th>Lote</th>
+                            <th>Etiqueta Calidad</th>
+                            <th>Destino / estado</th>
+                            <th>Escaneo</th>
                         </tr>
                     </thead>
-
                     <tbody>
                     @foreach (var item in Model.Items)
                     {
-                        var disponible =
-                            string.Equals(
-                                item.Estado,
-                                "EN_CALIDAD",
-                                StringComparison.OrdinalIgnoreCase);
+                        var tipo = (item.TipoEtiqueta ?? string.Empty).Trim().ToUpperInvariant();
+                        var estado = (item.Estado ?? string.Empty).Trim().ToUpperInvariant();
 
                         <tr>
                             <td>
-                                @if (disponible)
+                                @if (item.PuedeClasificarse)
                                 {
                                     <input type="checkbox"
-                                           class="form-check-input"
+                                           class="form-check-input qbox-row-check"
                                            name="cajaInventarioIds"
                                            value="@item.CalidadCajaInventarioID" />
                                 }
                             </td>
 
                             <td>
-                                <span class="quality-primary-text">
+                                <span class="quality-primary-text text-break">
                                     @item.CodigoBarras
                                 </span>
-
                                 <span class="quality-secondary-text">
                                     ID @item.CalidadCajaInventarioID
                                 </span>
@@ -166,24 +425,19 @@
 
                             <td>
                                 <span class="quality-primary-text">
-                                    @item.NumeroParteCatalogo
+                                    @(string.IsNullOrWhiteSpace(item.NumeroParteCatalogo)
+                                        ? item.NumeroParteEtiqueta
+                                        : item.NumeroParteCatalogo)
                                 </span>
-
                                 <span class="quality-secondary-text">
-                                    Etiqueta: @item.NumeroParteEtiqueta
+                                    @(string.IsNullOrWhiteSpace(item.DesignacionEtiqueta)
+                                        ? item.DescripcionCatalogo
+                                        : item.DesignacionEtiqueta)
                                 </span>
                             </td>
 
                             <td>
-                                @(string.IsNullOrWhiteSpace(item.NumeroOF)
-                                    ? "—"
-                                    : item.NumeroOF)
-                            </td>
-
-                            <td>
-                                @(string.IsNullOrWhiteSpace(item.DesignacionEtiqueta)
-                                    ? item.DescripcionCatalogo
-                                    : item.DesignacionEtiqueta)
+                                @(string.IsNullOrWhiteSpace(item.NumeroOF) ? "—" : item.NumeroOF)
                             </td>
 
                             <td class="fw-bold">
@@ -191,32 +445,91 @@
                             </td>
 
                             <td>
-                                @(string.IsNullOrWhiteSpace(item.LoteEtiqueta)
-                                    ? "—"
-                                    : item.LoteEtiqueta)
+                                @(string.IsNullOrWhiteSpace(item.LoteEtiqueta) ? "—" : item.LoteEtiqueta)
                             </td>
 
                             <td>
-                                @if (disponible)
+                                @switch (tipo)
+                                {
+                                    case "VERDE":
+                                        <span class="qbox-tag qbox-tag-green"><i class="fa-solid fa-circle"></i> Verde</span>
+                                        break;
+                                    case "AMARILLA":
+                                        <span class="qbox-tag qbox-tag-yellow"><i class="fa-solid fa-circle"></i> Amarilla</span>
+                                        break;
+                                    case "ROJA":
+                                        <span class="qbox-tag qbox-tag-red"><i class="fa-solid fa-circle"></i> Roja</span>
+                                        break;
+                                    case "BLANCA":
+                                        <span class="qbox-tag qbox-tag-white"><i class="fa-regular fa-circle"></i> Blanca</span>
+                                        break;
+                                    default:
+                                        <span class="qbox-tag qbox-tag-neutral">Sin clasificar</span>
+                                        break;
+                                }
+                            </td>
+
+                            <td>
+                                @if (estado == "PENDIENTE_ALMACEN")
+                                {
+                                    <span class="quality-status quality-status-success">
+                                        <i class="fa-solid fa-truck-ramp-box"></i>
+                                        Pendiente Almacén PT
+                                    </span>
+                                }
+                                else if (estado == "PENDIENTE_GP12")
+                                {
+                                    <span class="quality-status quality-status-warning">
+                                        <i class="fa-solid fa-magnifying-glass"></i>
+                                        GP12
+                                    </span>
+                                    @if (item.GP12SolicitudID.HasValue)
+                                    {
+                                        <span class="quality-secondary-text">Solicitud #@item.GP12SolicitudID</span>
+                                    }
+                                }
+                                else if (estado == "SCRAP")
+                                {
+                                    <span class="quality-status quality-status-danger">
+                                        <i class="fa-solid fa-recycle"></i>
+                                        Scrap
+                                    </span>
+                                    @if (item.ScrapRegistroID.HasValue)
+                                    {
+                                        <span class="quality-secondary-text">Registro #@item.ScrapRegistroID</span>
+                                    }
+                                }
+                                else if (estado == "ENVIADA_ALMACEN")
+                                {
+                                    <span class="quality-status quality-status-success">
+                                        <i class="fa-solid fa-warehouse"></i>
+                                        Recibida en PT
+                                    </span>
+                                    @if (item.AlmacenPTCajaID.HasValue)
+                                    {
+                                        <span class="quality-secondary-text">Caja PT #@item.AlmacenPTCajaID</span>
+                                    }
+                                }
+                                else if (tipo == "AMARILLA")
                                 {
                                     <span class="quality-status quality-status-warning">
                                         <i class="fa-solid fa-box"></i>
-                                        En Calidad
+                                        Retenida en Calidad
+                                    </span>
+                                }
+                                else if (tipo == "BLANCA")
+                                {
+                                    <span class="quality-status quality-status-info">
+                                        <i class="fa-solid fa-box-open"></i>
+                                        Producto incompleto
                                     </span>
                                 }
                                 else
                                 {
-                                    <span class="quality-status quality-status-success">
-                                        <i class="fa-solid fa-warehouse"></i>
-                                        Enviada a Almacén
+                                    <span class="quality-status quality-status-info">
+                                        <i class="fa-solid fa-hourglass-half"></i>
+                                        Pendiente de decisión
                                     </span>
-
-                                    @if (item.AlmacenPTCajaID.HasValue)
-                                    {
-                                        <span class="quality-secondary-text">
-                                            Caja PT #@item.AlmacenPTCajaID
-                                        </span>
-                                    }
                                 }
                             </td>
 
@@ -228,148 +541,249 @@
                     </tbody>
                 </table>
             </div>
-        }
-    </form>
+        </form>
+    }
 </section>
 
 <script>
 (() => {
-    const form =
-        document.getElementById(
-            'formCajasInventarioLibre');
+    const scanForm = document.getElementById('formCajasInventarioLibre');
+    const scanInput = document.getElementById('qboxScanInput');
+    const hiddenCodes = document.getElementById('codigosCajasInventarioLibre');
+    const scanList = document.getElementById('qboxScanList');
+    const scanCount = document.getElementById('qboxScanCount');
+    const validateButton = document.getElementById('btnConvertirCajasInventarioLibre');
+    const registerButton = document.getElementById('qboxRegisterButton');
+    const clearButton = document.getElementById('qboxClearButton');
+    const conversionResult = document.getElementById('resultadoConversionCajasInventarioLibre');
 
-    const button =
-        document.getElementById(
-            'btnConvertirCajasInventarioLibre');
+    let codes = [];
 
-    const result =
-        document.getElementById(
-            'resultadoConversionCajasInventarioLibre');
+    const escapeHtml = value => String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
 
-    if (!form || !button || !result)
-        return;
+    const syncCodes = () => {
+        if (!hiddenCodes || !scanList || !scanCount) return;
 
-    button.addEventListener(
-        'click',
-        async () => {
+        hiddenCodes.value = codes.join('\n');
+        scanCount.textContent = String(codes.length);
+        validateButton.disabled = codes.length === 0;
+        registerButton.disabled = codes.length === 0;
+        clearButton.disabled = codes.length === 0;
 
-            const textarea =
-                document.getElementById(
-                    'codigosCajasInventarioLibre');
+        scanList.innerHTML = '';
 
-            const token =
-                form.querySelector(
-                    'input[name="__RequestVerificationToken"]');
-
-            if (!textarea?.value.trim())
-            {
-                result.hidden=false;
-                result.innerHTML=
-                    '<div class="alert alert-warning mb-0">Escanea al menos una etiqueta.</div>';
-                return;
-            }
-
-            button.disabled=true;
-            button.innerHTML=
-                '<i class="fa-solid fa-spinner fa-spin"></i> Convirtiendo...';
-
-            try
-            {
-                const data=
-                    new FormData();
-
-                data.append(
-                    'codigosEscaneados',
-                    textarea.value);
-
-                if (token)
-                {
-                    data.append(
-                        '__RequestVerificationToken',
-                        token.value);
-                }
-
-                const response=
-                    await fetch(
-                        '@Url.Action("ConvertirCajasInventarioLibre","Calidad")',
-                        {
-                            method:'POST',
-                            body:data,
-                            credentials:'same-origin'
-                        });
-
-                const json=
-                    await response.json();
-
-                if (!response.ok || !json.ok)
-                {
-                    throw new Error(
-                        json.mensaje
-                        || 'No fue posible convertir las etiquetas.');
-                }
-
-                const rows=
-                    (json.items || [])
-                    .map(x => `
-                        <tr>
-                            <td>${x.renglon}</td>
-                            <td class="text-break">${escapeHtml(x.codigoOriginal)}</td>
-                            <td>${escapeHtml(x.numeroParte || '')}</td>
-                            <td>${Number(x.cantidad || 0).toLocaleString()}</td>
-                            <td>${escapeHtml(x.lote || '')}</td>
-                            <td>
-                                <span class="badge ${x.valido ? 'bg-success' : 'bg-danger'}">
-                                    ${x.valido ? 'Válida' : 'Revisar'}
-                                </span>
-                                <div class="small mt-1">${escapeHtml(x.mensaje || '')}</div>
-                            </td>
-                        </tr>`)
-                    .join('');
-
-                result.hidden=false;
-                result.innerHTML=`
-                    <div class="alert alert-info">
-                        Conversión: <strong>${json.validas}</strong> válida(s),
-                        <strong>${json.invalidas}</strong> por revisar.
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Etiqueta</th>
-                                    <th>Parte</th>
-                                    <th>Cantidad</th>
-                                    <th>Lote</th>
-                                    <th>Resultado</th>
-                                </tr>
-                            </thead>
-                            <tbody>${rows}</tbody>
-                        </table>
-                    </div>`;
-            }
-            catch (error)
-            {
-                result.hidden=false;
-                result.innerHTML=
-                    `<div class="alert alert-danger mb-0">${escapeHtml(error.message || String(error))}</div>`;
-            }
-            finally
-            {
-                button.disabled=false;
-                button.innerHTML=
-                    '<i class="fa-solid fa-wand-magic-sparkles"></i> Convertir etiquetas';
-            }
+        codes.forEach((code, index) => {
+            const row = document.createElement('div');
+            row.className = 'qbox-scan-row';
+            row.innerHTML = `
+                <strong>${index + 1}</strong>
+                <code>${escapeHtml(code)}</code>
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger"
+                        aria-label="Quitar etiqueta"
+                        data-qbox-remove="${index}">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>`;
+            scanList.appendChild(row);
         });
 
-    function escapeHtml(value)
-    {
-        return String(value ?? '')
-            .replaceAll('&','&amp;')
-            .replaceAll('<','&lt;')
-            .replaceAll('>','&gt;')
-            .replaceAll('"','&quot;')
-            .replaceAll("'","&#039;");
-    }
+        scanList.querySelectorAll('[data-qbox-remove]').forEach(button => {
+            button.addEventListener('click', () => {
+                const index = Number.parseInt(button.dataset.qboxRemove || '-1', 10);
+                if (index >= 0 && index < codes.length) {
+                    codes.splice(index, 1);
+                    if (conversionResult) conversionResult.hidden = true;
+                    syncCodes();
+                    scanInput?.focus();
+                }
+            });
+        });
+    };
+
+    const addScan = () => {
+        if (!scanInput) return;
+        const code = scanInput.value.trim();
+        if (!code) return;
+
+        if (code.length > 120) {
+            scanInput.select();
+            return;
+        }
+
+        if (codes.some(x => x.localeCompare(code, undefined, { sensitivity: 'accent' }) === 0)) {
+            scanInput.select();
+            return;
+        }
+
+        codes.push(code);
+        scanInput.value = '';
+        if (conversionResult) conversionResult.hidden = true;
+        syncCodes();
+        scanInput.focus();
+    };
+
+    scanInput?.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === 'Tab') {
+            event.preventDefault();
+            addScan();
+        }
+    });
+
+    clearButton?.addEventListener('click', () => {
+        codes = [];
+        if (scanInput) scanInput.value = '';
+        if (conversionResult) conversionResult.hidden = true;
+        syncCodes();
+        scanInput?.focus();
+    });
+
+    validateButton?.addEventListener('click', async () => {
+        if (!scanForm || !hiddenCodes || codes.length === 0 || !conversionResult) return;
+
+        const token = scanForm.querySelector('input[name="__RequestVerificationToken"]');
+        const data = new FormData();
+        data.append('codigosEscaneados', hiddenCodes.value);
+        if (token) data.append('__RequestVerificationToken', token.value);
+
+        validateButton.disabled = true;
+        const previous = validateButton.innerHTML;
+        validateButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando...';
+
+        try {
+            const response = await fetch('@Url.Action("ConvertirCajasInventarioLibre", "Calidad")', {
+                method: 'POST',
+                body: data,
+                credentials: 'same-origin'
+            });
+
+            const json = await response.json();
+            if (!response.ok || !json.ok) {
+                throw new Error(json.mensaje || 'No fue posible validar el lote.');
+            }
+
+            const rows = (json.items || []).map(x => `
+                <tr>
+                    <td>${x.renglon}</td>
+                    <td class="text-break">${escapeHtml(x.codigoOriginal)}</td>
+                    <td>${escapeHtml(x.numeroParte || '')}</td>
+                    <td>${Number(x.cantidad || 0).toLocaleString()}</td>
+                    <td>${escapeHtml(x.lote || '')}</td>
+                    <td>
+                        <span class="badge ${x.valido ? 'bg-success' : 'bg-danger'}">
+                            ${x.valido ? 'Lista' : 'Revisar'}
+                        </span>
+                        <div class="small mt-1">${escapeHtml(x.mensaje || '')}</div>
+                    </td>
+                </tr>`).join('');
+
+            conversionResult.hidden = false;
+            conversionResult.innerHTML = `
+                <div class="alert ${json.invalidas === 0 ? 'alert-success' : 'alert-warning'}">
+                    <strong>${json.validas}</strong> válida(s) ·
+                    <strong>${json.invalidas}</strong> por revisar.
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th><th>Etiqueta</th><th>Parte</th><th>Piezas</th><th>Lote</th><th>Resultado</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        } catch (error) {
+            conversionResult.hidden = false;
+            conversionResult.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || String(error))}</div>`;
+        } finally {
+            validateButton.disabled = codes.length === 0;
+            validateButton.innerHTML = previous;
+        }
+    });
+
+    scanForm?.addEventListener('submit', event => {
+        syncCodes();
+        if (codes.length === 0) {
+            event.preventDefault();
+            scanInput?.focus();
+        }
+    });
+
+    syncCodes();
+    scanInput?.focus();
+
+    const classificationForm = document.getElementById('qboxClassificationForm');
+    if (!classificationForm) return;
+
+    const typeInput = document.getElementById('qboxTipoEtiqueta');
+    const typeButtons = [...classificationForm.querySelectorAll('[data-qbox-type]')];
+    const gp12Wrap = document.getElementById('qboxGp12Wrap');
+    const gp12 = document.getElementById('qboxGp12');
+    const observations = document.getElementById('qboxObservaciones');
+    const selectAll = document.getElementById('qboxSelectAll');
+    const rowChecks = [...classificationForm.querySelectorAll('.qbox-row-check')];
+    const selectedCount = document.getElementById('qboxSelectedCount');
+    const message = document.getElementById('qboxClassificationMessage');
+
+    const refreshSelected = () => {
+        const selected = rowChecks.filter(x => x.checked).length;
+        if (selectedCount) selectedCount.textContent = String(selected);
+        if (selectAll) {
+            selectAll.checked = rowChecks.length > 0 && selected === rowChecks.length;
+            selectAll.indeterminate = selected > 0 && selected < rowChecks.length;
+        }
+    };
+
+    rowChecks.forEach(x => x.addEventListener('change', refreshSelected));
+
+    selectAll?.addEventListener('change', () => {
+        rowChecks.forEach(x => x.checked = selectAll.checked);
+        refreshSelected();
+    });
+
+    typeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const type = button.dataset.qboxType || '';
+            if (typeInput) typeInput.value = type;
+
+            typeButtons.forEach(x => x.classList.toggle('is-selected', x === button));
+
+            const isYellow = type === 'AMARILLA';
+            if (gp12Wrap) gp12Wrap.hidden = !isYellow;
+            if (!isYellow && gp12) gp12.checked = false;
+
+            if (message) message.hidden = true;
+        });
+    });
+
+    classificationForm.addEventListener('submit', event => {
+        const selected = rowChecks.filter(x => x.checked).length;
+        const type = typeInput?.value || '';
+        const gp12Checked = Boolean(gp12?.checked);
+
+        let problem = '';
+        if (selected === 0) problem = 'Selecciona al menos una caja.';
+        else if (!type) problem = 'Elige la etiqueta que se aplicará al lote.';
+        else if (gp12Checked && type !== 'AMARILLA') problem = 'GP12 solamente puede marcarse con etiqueta amarilla.';
+        else if (gp12Checked && !observations?.value.trim()) problem = 'Captura el motivo para enviar la caja amarilla a GP12.';
+
+        if (problem) {
+            event.preventDefault();
+            if (message) {
+                message.textContent = problem;
+                message.hidden = false;
+            }
+            return;
+        }
+
+        if (message) message.hidden = true;
+    });
+
+    refreshSelected();
 })();
 </script>

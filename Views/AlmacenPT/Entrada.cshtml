@@ -38,6 +38,62 @@
     </div>
 </section>
 
+@* NSQ_ALMACENPT_PENDIENTES_CALIDAD_V1_3 *@
+@{
+    var pendientesCalidadPT =
+        ViewBag.CalidadPendientesPT
+        as System.Collections.Generic.List<ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTCalidadPendienteVm>
+        ?? new System.Collections.Generic.List<ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTCalidadPendienteVm>();
+}
+
+@if (pendientesCalidadPT.Count > 0)
+{
+    <section class="alm-card" id="pendientes-calidad-pt">
+        <header>
+            <span>
+                <i class="fa-solid fa-circle-check"></i>
+                Pendientes de recepción desde Calidad
+            </span>
+            <span>@pendientesCalidadPT.Count caja(s)</span>
+        </header>
+
+        <div class="alm-alert">
+            Estas cajas ya fueron liberadas con etiqueta VERDE por Calidad.
+            Selecciona la ubicación y confirma la recepción escaneando físicamente
+            la misma etiqueta en el lector de abajo.
+        </div>
+
+        <div class="pt-convert-table-wrap">
+            <table class="pt-convert-table">
+                <thead>
+                    <tr>
+                        <th>Etiqueta</th>
+                        <th>OF</th>
+                        <th>Parte</th>
+                        <th>Designación</th>
+                        <th>Piezas</th>
+                        <th>Lote</th>
+                        <th>Liberada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var caja in pendientesCalidadPT)
+                    {
+                        <tr>
+                            <td class="pt-convert-code">@caja.CodigoBarras</td>
+                            <td>@(string.IsNullOrWhiteSpace(caja.NumeroOF) ? "-" : caja.NumeroOF)</td>
+                            <td><strong>@caja.NumeroParte</strong></td>
+                            <td>@caja.Designacion</td>
+                            <td><strong>@caja.Cantidad.ToString("N0")</strong></td>
+                            <td>@(string.IsNullOrWhiteSpace(caja.Lote) ? "-" : caja.Lote)</td>
+                            <td>@(caja.FechaClasificacion?.ToString("dd/MM HH:mm") ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
 <form method="post"
       id="ptScanForm"
       class="pt-scan-layout">

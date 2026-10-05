@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models;
+﻿using ERP.NSQuell.Models;
 using ERP.NSQuell.Servicios.Almacen;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +13,7 @@ using System.Linq;
 
 namespace ERP.NSQuell.Controllers
 {
-    public class GP12Controller : Controller
+    public partial class GP12Controller : Controller
     {
         private readonly IConfiguration _configuration;
 
@@ -182,6 +182,11 @@ ORDER BY
             }
 
             model.TotalMostrados = model.Solicitudes.Count;
+
+            // NSQ_GP12_RECEPCION_CALIDAD_V1_3
+            ViewBag.RecepcionCalidadRapida =
+                await CargarRecepcionCalidadRapidaAsync();
+
             return View(model);
         }
 
@@ -2007,6 +2012,41 @@ IF @@ROWCOUNT<>1
             }
             var usuarioID = ObtenerUsuarioIdActual();
             if (!usuarioID.HasValue || usuarioID.Value <= 0) return Unauthorized();
+            // NSQ_GP12_RECEPCION_CALIDAD_V1_3
+            // Las cajas enviadas fisicamente desde Calidad deben confirmarse
+            // mediante escaneo. Se evita que la recepcion manual salte ese control.
+            await using (var validacionCajaCalidad =
+                new SqlConnection(ConnectionString))
+            {
+                await validacionCajaCalidad.OpenAsync();
+
+                const string sqlCajaCalidad = @"
+SELECT COUNT(*)
+FROM dbo.GP12_Solicitudes
+WHERE SolicitudGP12ID=@SolicitudGP12ID
+  AND Activo=1
+  AND CalidadCajaInventarioID IS NOT NULL;";
+
+                await using var validar =
+                    new SqlCommand(
+                        sqlCajaCalidad,
+                        validacionCajaCalidad);
+
+                validar.Parameters.Add(
+                    "@SolicitudGP12ID",
+                    SqlDbType.Int).Value =
+                    model.SolicitudGP12ID;
+
+                if (Convert.ToInt32(
+                        await validar.ExecuteScalarAsync()
+                        ?? 0) > 0)
+                {
+                    TempData["Error"] =
+                        "Esta solicitud proviene de una caja fisica enviada por Calidad. Debes recibirla escaneando la misma etiqueta desde la bandeja de GP12.";
+
+                    return RedirectToAction(nameof(Index));
+                }
+            }
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);

@@ -1450,6 +1450,56 @@ VALUES
                     tipoMovimiento: "Entrada",
                     cancellationToken);
 
+                // NSQ_CALIDAD_CAJAS_CLASIFICACION_V1_1
+                // Una caja VERDE se libera en Calidad sin asignar ubicacion.
+                // Cuando Almacen PT la recibe fisicamente, este punto cierra
+                // la trazabilidad y registra la ubicacion elegida por Almacen.
+                const string sincronizarCalidadSql = @"
+UPDATE dbo.Calidad_CajasInventarioLibre
+SET
+    Estado=N'ENVIADA_ALMACEN',
+    FechaEnvioAlmacen=SYSDATETIME(),
+    UsuarioEnvioAlmacenID=@UsuarioID,
+    AlmacenPTCajaID=@CajaID,
+    UbicacionAlmacenID=@UbicacionID,
+    FechaModificacion=SYSDATETIME()
+WHERE Activo=1
+  AND CodigoBarras=@Codigo
+  AND Estado=N'PENDIENTE_ALMACEN'
+  AND TipoEtiqueta=N'VERDE'
+  AND AlmacenPTCajaID IS NULL;";
+
+                await using (var syncCalidad =
+                    new SqlCommand(
+                        sincronizarCalidadSql,
+                        db,
+                        transaction))
+                {
+                    syncCalidad.Parameters.Add(
+                        "@UsuarioID",
+                        SqlDbType.Int).Value =
+                        (object?)UsuarioID ?? DBNull.Value;
+
+                    syncCalidad.Parameters.Add(
+                        "@CajaID",
+                        SqlDbType.Int).Value =
+                        cajaID;
+
+                    syncCalidad.Parameters.Add(
+                        "@UbicacionID",
+                        SqlDbType.Int).Value =
+                        model.UbicacionID!.Value;
+
+                    syncCalidad.Parameters.Add(
+                        "@Codigo",
+                        SqlDbType.NVarChar,
+                        120).Value =
+                        item.CodigoOriginal;
+
+                    await syncCalidad.ExecuteNonQueryAsync(
+                        cancellationToken);
+                }
+
                 if (!string.Equals(
                         model.EstadoCalidad,
                         "Liberado",
@@ -2006,6 +2056,97 @@ VALUES
     {
         await using var connection =
             await AbrirConexionAsync(cancellationToken);
+        // NSQ_ALMACENPT_PENDIENTES_CALIDAD_V1_3
+        // Bandeja informativa: Almacen PT sigue obligado a escanear
+        // fisicamente la caja para confirmar su recepcion.
+        const string pendientesCalidadSql = @"
+SELECT TOP (100)
+    c.CalidadCajaInventarioID,
+    c.CodigoBarras,
+    c.NumeroOF,
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(p.NumeroParte)),N''),
+        c.NumeroParteEtiqueta
+    ) AS NumeroParte,
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(c.DesignacionEtiqueta)),N''),
+        NULLIF(LTRIM(RTRIM(p.Designacion)),N''),
+        NULLIF(LTRIM(RTRIM(p.Descripcion)),N''),
+        N''
+    ) AS Designacion,
+    c.Cantidad,
+    c.LoteEtiqueta,
+    c.FechaClasificacion
+FROM dbo.Calidad_CajasInventarioLibre c
+INNER JOIN dbo.ERP_Partes p
+    ON p.ParteID=c.ParteID
+WHERE c.Activo=1
+  AND c.Estado=N'PENDIENTE_ALMACEN'
+  AND c.TipoEtiqueta=N'VERDE'
+  AND ISNULL(c.RequiereGP12,0)=0
+  AND c.AlmacenPTCajaID IS NULL
+ORDER BY
+    c.FechaClasificacion,
+    c.CalidadCajaInventarioID;";
+
+        var pendientesCalidad =
+            new List<AlmacenPTCalidadPendienteVm>();
+
+        await using (var pendientesCmd =
+            new SqlCommand(
+                pendientesCalidadSql,
+                connection))
+        await using (var pendientesRd =
+            await pendientesCmd.ExecuteReaderAsync(
+                cancellationToken))
+        {
+            while (await pendientesRd.ReadAsync(
+                    cancellationToken))
+            {
+                pendientesCalidad.Add(
+                    new AlmacenPTCalidadPendienteVm
+                    {
+                        CalidadCajaInventarioID =
+                            Convert.ToInt64(
+                                pendientesRd["CalidadCajaInventarioID"]),
+
+                        CodigoBarras =
+                            pendientesRd["CodigoBarras"]?.ToString()?.Trim()
+                            ?? string.Empty,
+
+                        NumeroOF =
+                            pendientesRd["NumeroOF"] == DBNull.Value
+                                ? null
+                                : pendientesRd["NumeroOF"]?.ToString()?.Trim(),
+
+                        NumeroParte =
+                            pendientesRd["NumeroParte"]?.ToString()?.Trim()
+                            ?? string.Empty,
+
+                        Designacion =
+                            pendientesRd["Designacion"]?.ToString()?.Trim()
+                            ?? string.Empty,
+
+                        Cantidad =
+                            Convert.ToInt32(
+                                pendientesRd["Cantidad"]),
+
+                        Lote =
+                            pendientesRd["LoteEtiqueta"] == DBNull.Value
+                                ? null
+                                : pendientesRd["LoteEtiqueta"]?.ToString()?.Trim(),
+
+                        FechaClasificacion =
+                            pendientesRd["FechaClasificacion"] == DBNull.Value
+                                ? null
+                                : Convert.ToDateTime(
+                                    pendientesRd["FechaClasificacion"])
+                    });
+            }
+        }
+
+        ViewBag.CalidadPendientesPT =
+            pendientesCalidad;
 
         vm.Ubicaciones =
             await CargarUbicacionesAsync(
