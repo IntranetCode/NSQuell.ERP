@@ -520,7 +520,8 @@ ORDER BY p.OrdenSeccion,p.OrdenPregunta,p.PreguntaID;";
                         TextoPregunta = ChecklistTexto(rd, "TextoPregunta") ?? string.Empty,
                         ResponsableSugerido = ChecklistTexto(rd, "ResponsableSugerido"),
                         RequiereObservacionSiNOK = rd["RequiereObservacionSiNOK"] != DBNull.Value && Convert.ToBoolean(rd["RequiereObservacionSiNOK"]),
-                        RequiereObservacionSiNA = rd["RequiereObservacionSiNA"] != DBNull.Value && Convert.ToBoolean(rd["RequiereObservacionSiNA"]),
+                        // GQ-F-PR01-03: N/A nunca exige observacion.
+                        RequiereObservacionSiNA = false,
                         TipoChecklist = ChecklistTexto(rd, "TipoChecklist"),
                         MomentoProceso = ChecklistTexto(rd, "MomentoProceso"),
                         TipoRespuesta = ChecklistTexto(rd, "TipoRespuesta"),
@@ -529,7 +530,8 @@ ORDER BY p.OrdenSeccion,p.OrdenPregunta,p.PreguntaID;";
                         GrupoResponsable = ChecklistTexto(rd, "GrupoResponsable"),
                         EsRecurrente = rd["EsRecurrente"] != DBNull.Value && Convert.ToBoolean(rd["EsRecurrente"]),
                         EsObligatoria = rd["EsObligatoria"] != DBNull.Value && Convert.ToBoolean(rd["EsObligatoria"]),
-                        PermiteNA = rd["PermiteNA"] != DBNull.Value && Convert.ToBoolean(rd["PermiteNA"]),
+                        // GQ-F-PR01-03: todas las preguntas permiten N/A como respuesta valida.
+                        PermiteNA = true,
                         Activo = rd["Activo"] != DBNull.Value && Convert.ToBoolean(rd["Activo"]),
                         ChecklistArranqueDetalleID = ChecklistNullableInt(rd, "ChecklistArranqueDetalleID"),
                         Resultado = ChecklistTexto(rd, "Resultado"),

@@ -740,7 +740,7 @@ ORDER BY Codigo;";
                 vm.MaterialesFiltro.Add(new AlmacenSelectVm
                 {
                     Id = Entero(reader, "MaterialID"),
-                    Texto = $"{Texto(reader, "Codigo")} Â· {Texto(reader, "Nombre")}",
+                    Texto = $"{Texto(reader, "Codigo")} · {Texto(reader, "Nombre")}",
                     Extra = Texto(reader, "Codigo")
                 });
             }
@@ -819,7 +819,7 @@ ORDER BY Valor;";
         await using var connection = await AbrirConexionAsync(cancellationToken);
         if (!await ExisteObjetoAsync(connection, "dbo.ERP_Materiales", "U", cancellationToken))
         {
-            Mensaje("warning", "Primero ejecuta el script de estructura de AlmacÃ©n.");
+            Mensaje("warning", "Primero ejecuta el script de estructura de Almacén.");
             return View(rows);
         }
 
@@ -890,7 +890,7 @@ FROM dbo.ERP_Materiales WHERE MaterialID = @Id;";
         model.Nombre = model.Nombre?.Trim() ?? string.Empty;
         model.UnidadDefault = model.UnidadDefault?.Trim().ToUpperInvariant() ?? string.Empty;
         if (model.StockAviso < model.StockMinimo)
-            ModelState.AddModelError(nameof(model.StockAviso), "El nivel de aviso debe ser igual o mayor al stock mÃ­nimo.");
+            ModelState.AddModelError(nameof(model.StockAviso), "El nivel de aviso debe ser igual o mayor al stock mínimo.");
 
         if (!ModelState.IsValid) return View(model);
 
@@ -907,7 +907,7 @@ SELECT
             duplicate.Parameters.Add("@Id", SqlDbType.Int).Value = model.MaterialID.HasValue ? model.MaterialID.Value : DBNull.Value;
             if (Convert.ToInt32(await duplicate.ExecuteScalarAsync(cancellationToken)) > 0)
             {
-                ModelState.AddModelError(nameof(model.Codigo), "El cÃ³digo ya existe en MP o en Embalajes.");
+                ModelState.AddModelError(nameof(model.Codigo), "El código ya existe en MP o en Embalajes.");
                 return View(model);
             }
         }
@@ -1013,9 +1013,9 @@ ORDER BY CASE WHEN StockConfigurado = 0 THEN 0 ELSE 1 END, Nombre;";
         {
             var item = model.Items[i];
             if (item.StockMinimo < 0)
-                ModelState.AddModelError($"Items[{i}].StockMinimo", "El stock mÃ­nimo no puede ser negativo.");
+                ModelState.AddModelError($"Items[{i}].StockMinimo", "El stock mínimo no puede ser negativo.");
             if (item.StockAviso < item.StockMinimo)
-                ModelState.AddModelError($"Items[{i}].StockAviso", "El stock de aviso debe ser igual o mayor al mÃ­nimo.");
+                ModelState.AddModelError($"Items[{i}].StockAviso", "El stock de aviso debe ser igual o mayor al mínimo.");
         }
 
         if (!ModelState.IsValid)
@@ -1983,11 +1983,7 @@ VALUES
 SELECT MaterialID, Codigo, Nombre
 FROM dbo.ERP_Materiales
 WHERE Activo = 1
-  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%BOLSA%'
-  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%CAJA%'
-  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%MIXTO%'
-  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%BAG%'
-  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%BOX%'
+  AND UPPER(LTRIM(RTRIM(ISNULL(TipoMaterial, N'')))) = N'MP'
 ORDER BY Codigo;";
 
         await using (var command =
@@ -2001,7 +1997,7 @@ ORDER BY Codigo;";
                     new AlmacenSelectVm
                     {
                         Id = Entero(reader, "MaterialID"),
-                        Texto = $"{Texto(reader, "Codigo")} Â· {Texto(reader, "Nombre")}",
+                        Texto = $"{Texto(reader, "Codigo")} · {Texto(reader, "Nombre")}",
                         Extra = "KG"
                     });
             }
@@ -2160,7 +2156,7 @@ ORDER BY Almacen, Rack, Nivel, Posicion;";
             rows.Add(new AlmacenSelectVm
             {
                 Id = Entero(reader, "UbicacionID"),
-                Texto = string.Join(" Â· ", new[] { Texto(reader, "Almacen"), Texto(reader, "Rack"), Texto(reader, "Nivel"), Texto(reader, "Posicion") }.Where(x => !string.IsNullOrWhiteSpace(x)))
+                Texto = string.Join(" · ", new[] { Texto(reader, "Almacen"), Texto(reader, "Rack"), Texto(reader, "Nivel"), Texto(reader, "Posicion") }.Where(x => !string.IsNullOrWhiteSpace(x)))
             });
         }
         return rows;

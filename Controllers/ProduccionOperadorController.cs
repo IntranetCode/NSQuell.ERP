@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models;
+﻿using ERP.NSQuell.Models;
 using ERP.NSQuell.Servicios.Almacen;
 using ERP.NSQuell.Servicios.Planeacion;
 using Microsoft.AspNetCore.Http;
@@ -566,10 +566,10 @@ ORDER BY te.TiempoExtraID DESC;";
                 var fechaFinFila = fila.FechaProduccion.Date.Add(fila.HoraFin);
                 if (fechaFinFila <= fechaInicioFila) fechaFinFila = fechaFinFila.AddDays(1);
 
-                if (DateTime.Now < fechaFinFila)
+                if (DateTime.Now < fechaInicioFila)
                 {
                     await tx.RollbackAsync();
-                    return Json(new { ok = false, mensaje = $"El bloque todavía no termina. Podrás capturarlo a partir de las {fechaFinFila:HH:mm}." });
+                    return Json(new { ok = false, mensaje = $"El bloque todavía no inicia. Podrás capturarlo a partir de las {fechaInicioFila:HH:mm}." });
                 }
 
                 var calculo = await CalcularProduccionContadorHoraAsync(ejecucionProduccionId, fechaInicioFila, fechaFinFila, contadorMaquinaActual.Value, cn, tx);
@@ -789,9 +789,9 @@ ORDER BY te.TiempoExtraID DESC;";
             var fechaFinSolicitada = vm.FechaProduccion.Date.Add(horaFin);
             if (fechaFinSolicitada <= fechaInicioSolicitada) fechaFinSolicitada = fechaFinSolicitada.AddDays(1);
 
-            if (DateTime.Now < fechaFinSolicitada)
+            if (DateTime.Now < fechaInicioSolicitada)
             {
-                TempData["Error"] = $"La hora todavía no ha terminado. Podrás capturar este bloque a partir de {fechaFinSolicitada:HH:mm}.";
+                TempData["Error"] = $"La hora todavía no ha iniciado. Podrás capturar este bloque a partir de {fechaInicioSolicitada:HH:mm}.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
 
@@ -926,10 +926,10 @@ ORDER BY te.TiempoExtraID DESC;";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
 
-                if (DateTime.Now < fechaFinFila)
+                if (DateTime.Now < fechaInicioFila)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"La hora todavía no ha terminado. Podrás capturar a partir de {fechaFinFila:HH:mm}.";
+                    TempData["Error"] = $"La hora todavía no ha iniciado. Podrás capturar a partir de {fechaInicioFila:HH:mm}.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
 
@@ -4541,7 +4541,7 @@ WHERE MotivoParoID = @MotivoParoID
         }
 
         // NSQ_KIOSCO_SUPERVISOR_CARGOS_V1_HELPER
-        private static async Task<bool> UsuarioPuedeSupervisarKioscoAsync(
+                                private static async Task<bool> UsuarioPuedeSupervisarKioscoAsync(
             int usuarioId,
             SqlConnection cn,
             SqlTransaction? tx = null)
@@ -4566,33 +4566,36 @@ WHERE u.UsuarioID=@UsuarioID
             var rolId = rd["RolID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["RolID"]);
             if (rolId == 1) return true;
 
-            var colaboradorActivo = rd["EsColaboradorActivo"] != DBNull.Value && Convert.ToBoolean(rd["EsColaboradorActivo"]);
+            var colaboradorActivo =
+                rd["EsColaboradorActivo"] != DBNull.Value &&
+                Convert.ToBoolean(rd["EsColaboradorActivo"]);
+
             if (!colaboradorActivo) return false;
 
             var puesto = rd["Puesto"]?.ToString()?.Trim() ?? string.Empty;
+
             var esAuxiliarProduccion =
                 puesto.Contains("AUXILIAR", StringComparison.OrdinalIgnoreCase) &&
                 puesto.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
+
             var esEncargadoProduccion =
                 puesto.Contains("ENCARGAD", StringComparison.OrdinalIgnoreCase) &&
                 puesto.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
 
-            var esTecnicoProduccion =
-                puesto.Contains("TECN", StringComparison.OrdinalIgnoreCase) &&
-                puesto.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
-
-            return esAuxiliarProduccion || esEncargadoProduccion || esTecnicoProduccion;
+            // NSQ_PERMISOS_PRODUCCION_V1_0:
+            // Tecnico y SMED no son supervisores del kiosco. Su ejecucion
+            // queda limitada a los checklists desde el Centro Operativo.
+            return esAuxiliarProduccion || esEncargadoProduccion;
         }
-        private async Task<bool> UsuarioEsOperadorAsync(
+                                private async Task<bool> UsuarioEsOperadorAsync(
             int usuarioId,
             SqlConnection cn)
         {
             const string sql = @"
 SELECT TOP (1)
-    CASE
-        WHEN u.RolID = 1 THEN N'OPERADOR'
-        ELSE p.Puesto
-    END AS Puesto -- NSQ_OPERADOR_ADMIN_V1_1
+    u.RolID,
+    ISNULL(p.EsColaboradorActivo,0) AS EsColaboradorActivo,
+    LTRIM(RTRIM(ISNULL(p.Puesto,N''))) AS Puesto
 FROM dbo.Usuarios u
 INNER JOIN dbo.Persona p
     ON p.PersonaID = u.PersonaID
@@ -4600,20 +4603,35 @@ WHERE u.UsuarioID = @UsuarioID
   AND u.Activo = 1;";
 
             await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
 
-            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
-                usuarioId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync()) return false;
 
-            var result = await cmd.ExecuteScalarAsync();
+            var rolId = rd["RolID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["RolID"]);
+            if (rolId == 1) return true;
 
-            if (result == null || result == DBNull.Value)
-                return false;
+            var colaboradorActivo =
+                rd["EsColaboradorActivo"] != DBNull.Value &&
+                Convert.ToBoolean(rd["EsColaboradorActivo"]);
 
-            var puesto = result.ToString()?.Trim() ?? string.Empty;
+            if (!colaboradorActivo) return false;
 
-            return puesto.Equals("OPERADOR", StringComparison.OrdinalIgnoreCase) ||
-                   puesto.Contains("OPERADOR", StringComparison.OrdinalIgnoreCase) ||
-                   puesto.Equals("AUXILIAR DE PRODUCCION", StringComparison.OrdinalIgnoreCase);
+            var puesto = rd["Puesto"]?.ToString()?.Trim() ?? string.Empty;
+
+            var esOperador =
+                puesto.Contains("OPERADOR", StringComparison.OrdinalIgnoreCase);
+
+            var esAuxiliarProduccion =
+                puesto.Contains("AUXILIAR", StringComparison.OrdinalIgnoreCase) &&
+                puesto.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
+
+            var esEncargadoProduccion =
+                puesto.Contains("ENCARGAD", StringComparison.OrdinalIgnoreCase) &&
+                puesto.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
+
+            // NSQ_PERMISOS_PRODUCCION_V1_0
+            return esOperador || esAuxiliarProduccion || esEncargadoProduccion;
         }
 
 
@@ -7640,6 +7658,7 @@ END;";
                 bloqueFin = AlMinuto(bloqueFin);
                 var registro = BuscarRegistroBloque(bloqueInicio, bloqueFin);
                 var capturada = registro != null;
+                var bloqueIniciado = ahora >= bloqueInicio;
                 var bloqueTerminado = ahora >= bloqueFin;
                 var minutosBloque = Math.Max(0d, (bloqueFin - bloqueInicio).TotalMinutes);
                 int? objetivoBloqueCalculado = null;
@@ -7667,7 +7686,7 @@ END;";
                     ObjetivoBloque = objetivoBloqueFila,
                     Observaciones = registro?.Observaciones,
                     Capturada = capturada,
-                    Disponible = !capturada && bloqueTerminado,
+                    Disponible = !capturada && bloqueIniciado,
                     Vencida = !capturada && bloqueTerminado
                 };
             }
@@ -7731,7 +7750,7 @@ END;";
                 }
             }
             // ============================================================
-            // SOLAMENTE LA PRIMERA HORA PENDIENTE TERMINADA SE HABILITA
+            // SOLAMENTE LA PRIMERA HORA PENDIENTE YA INICIADA SE HABILITA
             // ============================================================
             var primeraPendiente =
                 filas

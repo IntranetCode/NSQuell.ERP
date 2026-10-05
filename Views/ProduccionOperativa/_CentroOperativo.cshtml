@@ -2225,3 +2225,318 @@
         root.addEventListener('nsq:operativa-accion-cargada',aplicarSoloLectura);
     })();
 </script>
+
+<style>
+/* NSQ_MODAL_OPERATIVA_ICONOS_FUENTE_NA_V1_2 */
+#produccionOperativaModal.nsq-operativa-plus .modal-content,
+.modal.show .modal-content.nsq-operativa-plus,
+.nsq-operativa-plus {
+    font-size: 16px;
+}
+
+.nsq-operativa-plus .modal-title,
+.nsq-operativa-plus h1,
+.nsq-operativa-plus h2,
+.nsq-operativa-plus h3,
+.nsq-operativa-plus h4,
+.nsq-operativa-plus h5,
+.nsq-operativa-plus h6 {
+    line-height: 1.3;
+}
+
+.nsq-operativa-plus .modal-title,
+.nsq-operativa-plus h1 { font-size: 2rem; }
+.nsq-operativa-plus h2 { font-size: 1.55rem; }
+.nsq-operativa-plus h3 { font-size: 1.30rem; }
+.nsq-operativa-plus h4 { font-size: 1.14rem; }
+.nsq-operativa-plus h5 { font-size: 1.02rem; }
+.nsq-operativa-plus h6 { font-size: .95rem; }
+
+.nsq-operativa-plus p,
+.nsq-operativa-plus li,
+.nsq-operativa-plus .small,
+.nsq-operativa-plus small,
+.nsq-operativa-plus .text-muted,
+.nsq-operativa-plus .card-body,
+.nsq-operativa-plus .accordion-body,
+.nsq-operativa-plus .accordion-button,
+.nsq-operativa-plus .dropdown-item,
+.nsq-operativa-plus .form-label,
+.nsq-operativa-plus .form-check-label,
+.nsq-operativa-plus .form-control,
+.nsq-operativa-plus .form-select,
+.nsq-operativa-plus textarea,
+.nsq-operativa-plus input,
+.nsq-operativa-plus select,
+.nsq-operativa-plus .btn,
+.nsq-operativa-plus .badge,
+.nsq-operativa-plus .nav-link,
+.nsq-operativa-plus .list-group-item,
+.nsq-operativa-plus .table,
+.nsq-operativa-plus label,
+.nsq-operativa-plus span,
+.nsq-operativa-plus strong {
+    font-size: inherit;
+}
+
+.nsq-operativa-plus .btn,
+.nsq-operativa-plus .form-control,
+.nsq-operativa-plus .form-select,
+.nsq-operativa-plus textarea,
+.nsq-operativa-plus input,
+.nsq-operativa-plus select {
+    min-height: 40px;
+}
+
+.nsq-operativa-plus .btn {
+    padding: .55rem .90rem;
+}
+
+.nsq-operativa-plus .accordion-button,
+.nsq-operativa-plus .dropdown-item,
+.nsq-operativa-plus .nav-link,
+.nsq-operativa-plus .list-group-item {
+    line-height: 1.45;
+}
+
+.nsq-operativa-plus .badge {
+    padding: .45em .7em;
+}
+
+.nsq-operativa-plus .modal-body {
+    min-height: 56vh;
+    overflow-y: auto;
+}
+
+.nsq-operativa-plus [data-nsq-action-icons] button,
+.nsq-operativa-plus [data-nsq-action-icons] a,
+.nsq-operativa-plus .nsq-modal-actions button,
+.nsq-operativa-plus .nsq-modal-actions a {
+    min-width: 42px;
+    min-height: 42px;
+}
+
+.nsq-operativa-plus [data-nsq-action-icons] i,
+.nsq-operativa-plus .nsq-modal-actions i {
+    font-size: 1rem;
+}
+
+@@media (max-width: 1200px) {
+    .nsq-operativa-plus {
+        font-size: 15px;
+    }
+}
+
+@@media (max-width: 700px) {
+    .nsq-operativa-plus {
+        font-size: 14px;
+    }
+
+    .nsq-operativa-plus .modal-title,
+    .nsq-operativa-plus h1 { font-size: 1.55rem; }
+    .nsq-operativa-plus h2 { font-size: 1.30rem; }
+}
+</style>
+
+<script>
+/* NSQ_MODAL_OPERATIVA_ICONOS_FUENTE_NA_V1_2 */
+(function () {
+    if (window.__nsqOperativaModalPlusLoaded) return;
+    window.__nsqOperativaModalPlusLoaded = true;
+
+    function normalize(s) {
+        return (s || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function getLikelyModal() {
+        var selectors = [
+            '#produccionOperativaModal',
+            '#modalProduccionOperativa',
+            '.produccion-operativa-modal.show',
+            '.modal.show'
+        ];
+
+        for (var i = 0; i < selectors.length; i++) {
+            var modal = document.querySelector(selectors[i]);
+            if (!modal) continue;
+            if (modal.innerText && modal.innerText.indexOf('Ver flujo completo de la OF') >= 0) {
+                return modal;
+            }
+        }
+
+        var all = document.querySelectorAll('.modal');
+        for (var j = 0; j < all.length; j++) {
+            if ((all[j].innerText || '').indexOf('Ver flujo completo de la OF') >= 0) {
+                return all[j];
+            }
+        }
+        return null;
+    }
+
+    function ensureClass(modal) {
+        if (!modal) return;
+        modal.classList.add('nsq-operativa-plus');
+        var content = modal.querySelector('.modal-content');
+        if (content) content.classList.add('nsq-operativa-plus');
+    }
+
+    function getActionContainer(modal) {
+        if (!modal) return null;
+        var header = modal.querySelector('.modal-header') || modal;
+        var candidates = Array.prototype.slice.call(header.querySelectorAll('div, nav, section'));
+
+        for (var i = 0; i < candidates.length; i++) {
+            var c = candidates[i];
+            var buttons = c.querySelectorAll('button, a');
+            if (buttons.length < 4 || buttons.length > 8) continue;
+
+            var emptyCount = 0;
+            buttons.forEach(function (b) {
+                var hasVisual = !!b.querySelector('i,svg,img');
+                var txt = (b.textContent || '').trim();
+                if (!hasVisual && txt === '') emptyCount++;
+            });
+
+            if (emptyCount >= 3) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    function decorateActions(modal) {
+        var container = getActionContainer(modal);
+        if (!container) return;
+
+        container.setAttribute('data-nsq-action-icons', 'true');
+        container.classList.add('nsq-modal-actions');
+
+        var buttons = Array.prototype.slice.call(container.querySelectorAll('button, a'));
+        var defaultIcons = [
+            'bi bi-people-fill',
+            'bi bi-box-seam',
+            'bi bi-ui-checks-grid',
+            'bi bi-lightning-charge-fill',
+            'bi bi-tools'
+        ];
+
+        var defaultTitles = [
+            'Personal',
+            'Materiales',
+            'Checklist',
+            'Acción rápida',
+            'Herramientas'
+        ];
+
+        buttons.forEach(function (btn, index) {
+            if (btn.querySelector('i,svg,img')) return;
+
+            var txt = normalize(btn.textContent);
+            var title = normalize(btn.getAttribute('title')) || normalize(btn.getAttribute('aria-label'));
+            var isRed = /danger|red|rojo/.test((btn.className || '').toLowerCase()) || btn.style.backgroundColor === 'red';
+            var icon = '';
+
+            if (title.indexOf('personal') >= 0 || txt.indexOf('personal') >= 0) icon = 'bi bi-people-fill';
+            else if (title.indexOf('material') >= 0 || txt.indexOf('material') >= 0) icon = 'bi bi-box-seam';
+            else if (title.indexOf('check') >= 0 || txt.indexOf('check') >= 0) icon = 'bi bi-ui-checks-grid';
+            else if (title.indexOf('herramienta') >= 0 || txt.indexOf('herramienta') >= 0 || title.indexOf('consulta') >= 0) icon = 'bi bi-tools';
+            else if (title.indexOf('flujo') >= 0 || txt.indexOf('flujo') >= 0) icon = 'bi bi-diagram-3-fill';
+            else if (isRed) icon = 'bi bi-lightning-charge-fill';
+            else icon = defaultIcons[index] || 'bi bi-square';
+
+            var titleToSet = btn.getAttribute('title') || btn.getAttribute('aria-label') || defaultTitles[index] || 'Acción';
+            btn.setAttribute('title', titleToSet);
+            btn.setAttribute('aria-label', titleToSet);
+
+            btn.innerHTML = '<i class="' + icon + '"></i>';
+        });
+    }
+
+    function isChecklistControl(el) {
+        if (!el) return false;
+        if (el.closest('.pcc-op')) return true;
+        if (el.closest('[data-checklist-root]')) return true;
+        if (el.closest('.checklist')) return true;
+        if (el.closest('.modal') && /(ok|nok|n\/?a)/i.test((el.textContent || '').trim())) return true;
+        return false;
+    }
+
+    function stabilizeModal(modal) {
+        if (!modal) return;
+        ensureClass(modal);
+
+        var body = modal.querySelector('.modal-body');
+        if (body) {
+            body.style.minHeight = '56vh';
+            body.style.overflowY = 'auto';
+        }
+
+        if (window.bootstrap && typeof window.bootstrap.Modal !== 'undefined') {
+            var inst = window.bootstrap.Modal.getInstance(modal);
+            if (inst && typeof inst.handleUpdate === 'function') {
+                inst.handleUpdate();
+            }
+        }
+    }
+
+    function bindChecklistGuards(modal) {
+        if (!modal || modal.__nsqChecklistGuardBound) return;
+        modal.__nsqChecklistGuardBound = true;
+
+        modal.addEventListener('click', function (ev) {
+            var t = ev.target;
+            if (!isChecklistControl(t)) return;
+
+            var text = normalize(t.textContent || (t.value || ''));
+            if (text === 'na' || text === 'n/a' || text === 'ok' || text === 'nok') {
+                ev.stopPropagation();
+            }
+        }, true);
+
+        modal.addEventListener('change', function (ev) {
+            var t = ev.target;
+            if (!t) return;
+            if (!isChecklistControl(t)) return;
+
+            var val = normalize(t.value || t.getAttribute('data-value') || t.textContent || '');
+            if (val === 'na' || val === 'n/a' || val === 'ok' || val === 'nok') {
+                setTimeout(function () {
+                    stabilizeModal(modal);
+                }, 0);
+            }
+        }, true);
+
+        var body = modal.querySelector('.modal-body');
+        if (body && !body.__nsqObserved) {
+            body.__nsqObserved = true;
+            var observer = new MutationObserver(function () {
+                stabilizeModal(modal);
+            });
+            observer.observe(body, {
+                attributes: true,
+                childList: true,
+                subtree: true,
+                attributeFilter: ['style', 'class']
+            });
+        }
+    }
+
+    function apply() {
+        var modal = getLikelyModal();
+        if (!modal) return;
+        ensureClass(modal);
+        decorateActions(modal);
+        bindChecklistGuards(modal);
+        stabilizeModal(modal);
+    }
+
+    document.addEventListener('DOMContentLoaded', apply);
+    document.addEventListener('click', function () { setTimeout(apply, 50); }, true);
+    document.addEventListener('shown.bs.modal', function () { setTimeout(apply, 50); });
+    setTimeout(apply, 300);
+    setInterval(apply, 2000);
+})();
+</script>

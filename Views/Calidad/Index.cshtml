@@ -1350,7 +1350,19 @@
         </section>
 
 
+                @* NSQ_CALIDAD_CAJAS_INVENTARIO_LIBRE_VIEW_V1_1 *@
         @if (grupoCalidad == "CAJAS")
+        {
+            var inventarioLibre =
+                ViewBag.CajasInventarioLibre
+                as ERP.NSQuell.Models.ViewModels.CalidadCajasInventarioLibreVm
+                ?? new ERP.NSQuell.Models.ViewModels.CalidadCajasInventarioLibreVm();
+
+            @await Html.PartialAsync(
+                "_CajasInventarioLibre",
+                inventarioLibre)
+        }
+@if (grupoCalidad == "CAJAS")
         {
             <section class="quality-scan-card" aria-labelledby="scanGeneralTitle">
                 <div class="quality-scan-card-header">

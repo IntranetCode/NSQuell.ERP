@@ -49,6 +49,7 @@ public sealed class ProduccionCambioTurnoOperativoVm
     public int UsuarioID { get; set; }
     public int? PersonaUsuarioID { get; set; }
     public bool UsuarioEsOperador { get; set; }
+    public bool UsuarioPuedeSupervisarCambioTurno { get; set; }
     public bool SoloLecturaSolicitado { get; set; }
 
     public bool TieneCambioPendiente => CambioPendiente != null;
@@ -65,8 +66,8 @@ public sealed class ProduccionCambioTurnoOperativoVm
 
     public bool PuedeEntregar =>
         !SoloLecturaSolicitado &&
-        UsuarioEsOperador &&
-        UsuarioEsOperadorActual &&
+        (UsuarioEsOperador || UsuarioPuedeSupervisarCambioTurno) &&
+        (UsuarioEsOperadorActual || UsuarioPuedeSupervisarCambioTurno) &&
         RequiereCambioTurno &&
         CambioPendiente == null &&
         Resumen?.PuedeEntregar == true;

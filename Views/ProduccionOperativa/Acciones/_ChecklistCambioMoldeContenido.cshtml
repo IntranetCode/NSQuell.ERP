@@ -536,6 +536,220 @@
             display: none
         }
     }
+
+    /* NSQ_CHECKLIST_MOLDE_LEGIBILIDAD_V1_0 */
+    .pcc-op {
+        font-size: 16px;
+    }
+
+    .pcc-op .pcc-top strong {
+        font-size: 1.12rem;
+    }
+
+    .pcc-op .pcc-top small {
+        font-size: .82rem;
+        line-height: 1.4;
+    }
+
+    .pcc-op .pcc-back {
+        font-size: .82rem;
+        padding: 9px 12px;
+    }
+
+    .pcc-op .pcc-info-box span {
+        font-size: .72rem;
+    }
+
+    .pcc-op .pcc-info-box strong {
+        font-size: .92rem;
+        line-height: 1.35;
+    }
+
+    .pcc-op .pcc-pair-item {
+        font-size: .82rem;
+    }
+
+    .pcc-op .pcc-pair-item strong {
+        font-size: .92rem;
+    }
+
+    .pcc-op .pcc-progress-top {
+        font-size: .88rem;
+    }
+
+    .pcc-op .pcc-alert {
+        font-size: .86rem;
+        line-height: 1.5;
+    }
+
+    .pcc-op .pcc-section-title {
+        font-size: .98rem;
+    }
+
+    .pcc-op .pcc-section-sub {
+        font-size: .78rem;
+    }
+
+    .pcc-op .pcc-pill {
+        font-size: .74rem;
+        padding: 5px 9px;
+    }
+
+    .pcc-op .pcc-question {
+        grid-template-columns: 38px minmax(0,1fr) minmax(360px,.9fr);
+        gap: 13px;
+        padding: 14px 0;
+    }
+
+    .pcc-op .pcc-number {
+        width: 32px;
+        height: 32px;
+        font-size: .78rem;
+    }
+
+    .pcc-op .pcc-question-text {
+        font-size: .96rem;
+        line-height: 1.5;
+    }
+
+    .pcc-op .pcc-meta {
+        margin-top: 7px;
+    }
+
+    .pcc-op .pcc-meta span {
+        font-size: .70rem;
+        padding: 3px 7px;
+    }
+
+    .pcc-op .pcc-option label {
+        min-height: 38px;
+        padding: 8px 11px;
+        font-size: .82rem;
+    }
+
+    .pcc-op .pcc-observation label {
+        font-size: .76rem;
+        margin-bottom: 5px;
+    }
+
+    .pcc-op .pcc-observation textarea {
+        min-height: 62px;
+        padding: 9px 10px;
+        font-size: .88rem;
+        line-height: 1.45;
+    }
+
+    .pcc-op .pcc-saved {
+        font-size: .70rem;
+    }
+
+    .pcc-op .pcc-btn {
+        padding: 9px 13px;
+        font-size: .82rem;
+    }
+
+    .pcc-op .pcc-general label {
+        font-size: .82rem;
+    }
+
+    .pcc-op .pcc-general textarea {
+        min-height: 76px;
+        font-size: .88rem;
+        line-height: 1.45;
+    }
+
+    .pcc-op .pcc-final strong {
+        font-size: .94rem;
+    }
+
+    .pcc-op .pcc-final span {
+        font-size: .80rem;
+        line-height: 1.4;
+    }
+
+    .pcc-op .pcc-toast {
+        font-size: .84rem;
+    }
+
+    @@media(max-width:1100px) {
+        .pcc-op .pcc-question {
+            grid-template-columns: 38px minmax(0,1fr);
+        }
+
+        .pcc-op .pcc-answer {
+            grid-column: 2;
+        }
+    }
+
+    @@media(max-width:700px) {
+        .pcc-op .pcc-question {
+            grid-template-columns: 1fr;
+        }
+
+        .pcc-op .pcc-answer {
+            grid-column: 1;
+        }
+
+        .pcc-op .pcc-number {
+            display: none;
+        }
+
+        .pcc-op .pcc-options {
+            gap: 8px;
+        }
+
+        .pcc-op .pcc-option label {
+            min-height: 42px;
+            font-size: .88rem;
+        }
+    }
+<style>
+/* NSQ_CHECKLIST_CAMBIO_MOLDE_NA_UI_REFUERZO_V1_0 */
+.pcc-op {
+    font-size: 16px;
+}
+
+.pcc-op .pcc-question,
+.pcc-op .pcc-answer,
+.pcc-op .pcc-section-title,
+.pcc-op .pcc-section-sub,
+.pcc-op .pcc-pill,
+.pcc-op .pcc-option label,
+.pcc-op .pcc-observation label,
+.pcc-op .pcc-observation textarea,
+.pcc-op .pcc-btn,
+.pcc-op .pcc-general label,
+.pcc-op .pcc-general textarea {
+    font-size: inherit;
+}
+
+.pcc-op .pcc-option label {
+    min-height: 40px;
+}
+</style>
+
+<script>
+/* NSQ_CHECKLIST_CAMBIO_MOLDE_NA_UI_REFUERZO_V1_0 */
+(function(){
+    if (window.__nsqChecklistNAFixLoaded) return;
+    window.__nsqChecklistNAFixLoaded = true;
+
+    function normalize(s){
+        return (s || '').replace(/\s+/g,' ').trim().toLowerCase();
+    }
+
+    document.addEventListener('click', function(ev){
+        var target = ev.target;
+        var option = target && target.closest ? target.closest('.pcc-option label, .pcc-option input, .pcc-question') : null;
+        if (!option) return;
+
+        var txt = normalize(option.textContent || option.value || '');
+        if (txt === 'na' || txt === 'n/a' || txt === 'ok' || txt === 'nok') {
+            ev.stopPropagation();
+        }
+    }, true);
+})();
+</script>
 </style>
 
 <div id="@rootId"

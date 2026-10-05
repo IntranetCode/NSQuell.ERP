@@ -1246,7 +1246,7 @@ public sealed partial class ProduccionOperativaController : Controller
         if (k == AgendaOperativaPasoClave.Secado || k == "CAMBIO_TOLVA") return p.PuedeGestionarSecado;
         if (k == AgendaOperativaPasoClave.CambioMolde || k == AgendaOperativaPasoClave.PreparacionMolde) return p.PuedeGestionarCambioMolde;
         if (k == "CHECKLIST_CAMBIO_MOLDE") return p.PuedeGestionarChecklistCambioMolde;
-        if (k == "INICIAR_PREPARACION") return p.PuedeSupervisar || usuario.EsAuxiliarProduccion || usuario.EsTecnicoProduccion;
+        if (k == "INICIAR_PREPARACION") return p.PuedeSupervisar;
         if (k == AgendaOperativaPasoClave.ChecklistArranque) return p.PuedeGestionarChecklistArranque;
         if (k == AgendaOperativaPasoClave.ConfiguracionCorrida) return p.PuedeGestionarConfiguracionTecnica;
         if (k == AgendaOperativaPasoClave.PrimerasPiezas || k == AgendaOperativaPasoClave.Calidad || k == AgendaOperativaPasoClave.CalidadFinal || k == "RELIBERACION_CALIDAD") return p.PuedeGestionarCalidad || p.PuedeGestionarReliberacion;
@@ -1267,49 +1267,68 @@ public sealed partial class ProduccionOperativaController : Controller
         if (k == ProduccionOperativaAccionClave.DetalleCompleto) return p.PuedeVerDetalleCompleto;
         var a = (area ?? string.Empty).Trim().ToUpperInvariant();
         if (a == AgendaOperativaArea.Calidad) return p.PuedeGestionarCalidad;
-        if (a == AgendaOperativaArea.Smed) return p.PuedeGestionarCambioMolde || p.PuedeGestionarChecklistCambioMolde;
-        if (a == AgendaOperativaArea.TecnicoProduccion) return p.PuedeGestionarConfiguracionTecnica || p.PuedeGestionarChecklistArranque;
+        if (a == AgendaOperativaArea.Smed) return p.PuedeGestionarCambioMolde;
+        if (a == AgendaOperativaArea.TecnicoProduccion) return p.PuedeGestionarConfiguracionTecnica;
         if (a == AgendaOperativaArea.Operador) return usuario.EsOperadorProduccion || usuario.EsAuxiliarProduccion || p.PuedeSupervisar;
-        if (a == AgendaOperativaArea.Produccion) return p.TienePermisosOperativos;
+        if (a == AgendaOperativaArea.Produccion) return p.PuedeSupervisar || usuario.EsOperadorProduccion;
         if (a == AgendaOperativaArea.Mantenimiento) return usuario.EsMantenimiento;
         return false;
     }
 
-    private static ProduccionOperativaPermisosVm ConstruirPermisos(UsuarioOperativoDto u, bool soloLecturaSolicitado)
+                private static ProduccionOperativaPermisosVm ConstruirPermisos(UsuarioOperativoDto u, bool soloLecturaSolicitado)
     {
-        var supervisor = u.EsAdministradorERP || u.EsEncargadoProduccion;
-        var supervisorKiosco = supervisor || u.EsAuxiliarProduccion;
+        // NSQ_PERMISOS_PRODUCCION_V1_0
+        // Auxiliar y Encargado comparten exactamente el mismo nivel operativo.
+        // Tecnico y SMED solo pueden ejecutar los dos checklists de Produccion.
+        var supervisor =
+            u.EsAdministradorERP ||
+            u.EsEncargadoProduccion ||
+            u.EsAuxiliarProduccion;
+
+        var especialistaChecklist =
+            u.EsTecnicoProduccion ||
+            u.EsSMED;
+
         var p = new ProduccionOperativaPermisosVm
         {
             PuedeVerCentroOperativo = u.Activo,
             PuedeVerDetalleCompleto = u.Activo,
             PuedeVerHistorial = u.Activo,
+
             PuedeGestionarPersonal = supervisor,
-            PuedeRecibirMateriaPrima = supervisor || u.EsAuxiliarProduccion,
-            PuedeGestionarEmbalaje = supervisor || u.EsAuxiliarProduccion,
-            PuedeGestionarSecado = supervisor || u.EsTecnicoProduccion || u.EsSMED || u.EsAuxiliarProduccion,
-            PuedeGestionarCambioMolde = supervisor || u.EsTecnicoProduccion || u.EsSMED,
-            PuedeGestionarChecklistCambioMolde = supervisor || u.EsTecnicoProduccion || u.EsSMED,
-            PuedeGestionarChecklistArranque = supervisor || u.EsAuxiliarProduccion || u.EsTecnicoProduccion || u.EsSMED,
+            PuedeRecibirMateriaPrima = supervisor,
+            PuedeGestionarEmbalaje = supervisor,
+            PuedeGestionarSecado = supervisor,
+            PuedeGestionarCambioMolde = supervisor,
+
+            PuedeGestionarChecklistCambioMolde = supervisor || especialistaChecklist,
+            PuedeGestionarChecklistArranque = supervisor || especialistaChecklist,
+
             PuedeGestionarCalidad = u.EsAdministradorERP || u.EsCalidad,
             PuedeGestionarReliberacion = u.EsAdministradorERP || u.EsCalidad,
-            PuedeGestionarConfiguracionTecnica = supervisor || u.EsAuxiliarProduccion || u.EsTecnicoProduccion,
-            PuedeIniciarSerie = supervisorKiosco || u.EsTecnicoProduccion || u.EsOperadorProduccion,
-            PuedeRegistrarCapturaHora = supervisorKiosco || u.EsOperadorProduccion,
-            PuedeGestionarParos = supervisorKiosco || u.EsOperadorProduccion,
-            PuedeGestionarCambioTurno = u.EsAdministradorERP || u.EsOperadorProduccion || u.EsAuxiliarProduccion,
-            PuedeGestionarMonitoreoTurno = supervisorKiosco || u.EsTecnicoProduccion || u.EsSMED,
-            PuedeGestionarCajas = u.EsAdministradorERP || u.EsAuxiliarProduccion || u.EsOperadorProduccion,
-            PuedeGestionarProductoIncompleto = u.EsAdministradorERP || u.EsAuxiliarProduccion || u.EsOperadorProduccion,
-            PuedeGestionarTiempoExtra = u.EsAdministradorERP || u.EsAuxiliarProduccion || u.EsOperadorProduccion,
-            PuedeAjustarProduccion = supervisorKiosco,
-            PuedeLiberarMaquina = supervisorKiosco || u.EsTecnicoProduccion || u.EsOperadorProduccion,
-            PuedeTerminarProduccion = supervisorKiosco || u.EsTecnicoProduccion || u.EsOperadorProduccion,
+
+            PuedeGestionarConfiguracionTecnica = supervisor,
+            PuedeIniciarSerie = supervisor || u.EsOperadorProduccion,
+
+            PuedeRegistrarCapturaHora = supervisor || u.EsOperadorProduccion,
+            PuedeGestionarParos = supervisor || u.EsOperadorProduccion,
+            PuedeGestionarCambioTurno = supervisor || u.EsOperadorProduccion,
+            PuedeGestionarMonitoreoTurno = supervisor,
+            PuedeGestionarCajas = supervisor || u.EsOperadorProduccion,
+            PuedeGestionarProductoIncompleto = supervisor || u.EsOperadorProduccion,
+            PuedeGestionarTiempoExtra = supervisor || u.EsOperadorProduccion,
+            PuedeAjustarProduccion = supervisor,
+
+            PuedeLiberarMaquina = supervisor || u.EsOperadorProduccion,
+            PuedeTerminarProduccion = supervisor || u.EsOperadorProduccion,
+
             PuedeGestionarCalidadFinal = u.EsAdministradorERP || u.EsCalidad,
             PuedeGestionarGP12 = u.EsAdministradorERP || u.EsCalidad,
-            PuedeGestionarCierreDocumental = supervisorKiosco,
-            PuedeSupervisar = supervisorKiosco
+            PuedeGestionarCierreDocumental = supervisor,
+
+            PuedeSupervisar = supervisor
         };
+
         p.SoloLectura = soloLecturaSolicitado || !p.TienePermisosOperativos;
         return p;
     }

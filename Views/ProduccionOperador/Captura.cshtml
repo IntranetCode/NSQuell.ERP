@@ -3917,6 +3917,27 @@ else
             }
             return null;
         }
+        // NSQ_CAMBIO_TURNO_DOM_SEGURO_V1_1
+        function setTextoCambioTurno(id,valor){
+            const el=document.getElementById(id);
+            if(!el)return false;
+            el.textContent=valor;
+            return true;
+        }
+        // NSQ_CAMBIO_TURNO_DOM_SEGURO_V1_1
+        function setTextoCambioTurno(id,valor){
+            const el=document.getElementById(id);
+            if(!el)return false;
+            el.textContent=valor;
+            return true;
+        }
+        // NSQ_CAMBIO_TURNO_DOM_SEGURO_V1_1
+        function setTextoCambioTurno(id,valor){
+            const el=document.getElementById(id);
+            if(!el)return false;
+            el.textContent=valor;
+            return true;
+        }
         function mostrarErrorCambioTurno(mensaje){
             const box=document.getElementById('mensajeCambioTurno');
             if(!box)return;
@@ -4002,16 +4023,16 @@ else
             const maquinaCodigo=propiedad(resumen,'maquinaCodigo','MaquinaCodigo');
             const maquinaNombre=propiedad(resumen,'maquinaNombre','MaquinaNombre');
             const maquina=[maquinaCodigo,maquinaNombre].filter(x=>x&&String(x).trim()!=='').join(' - ');
-            document.getElementById('turnMaquina').textContent=textoSeguro(maquina);
-            document.getElementById('turnParte').textContent=textoSeguro(propiedad(resumen,'referenciaSAP','ReferenciaSAP')||propiedad(resumen,'numeroParte','NumeroParte'));
-            document.getElementById('turnUltimaHora').textContent=textoSeguro(propiedad(resumen,'ultimaHoraTexto','UltimaHoraTexto'),'Sin captura registrada');
-            document.getElementById('turnOperadorSaliente').textContent=textoSeguro(propiedad(resumen,'operadorSalienteNombre','OperadorSalienteNombre'));
-            document.getElementById('turnCantidadOK').textContent=numeroCambioTurno(propiedad(resumen,'cantidadOK','CantidadOK'));
-            document.getElementById('turnCantidadScrap').textContent=numeroCambioTurno(propiedad(resumen,'cantidadScrap','CantidadScrap'));
-            document.getElementById('turnTotalCajas').textContent=numeroCambioTurno(propiedad(resumen,'totalCajas','TotalCajas'));
-            document.getElementById('turnCajasEntregadas').textContent=numeroCambioTurno(propiedad(resumen,'totalCajasEntregadas','TotalCajasEntregadas'));
+            setTextoCambioTurno('turnMaquina',textoSeguro(maquina));
+            setTextoCambioTurno('turnParte',textoSeguro(propiedad(resumen,'referenciaSAP','ReferenciaSAP')||propiedad(resumen,'numeroParte','NumeroParte')));
+            setTextoCambioTurno('turnUltimaHora',textoSeguro(propiedad(resumen,'ultimaHoraTexto','UltimaHoraTexto'),'Sin captura registrada'));
+            setTextoCambioTurno('turnOperadorSaliente',textoSeguro(propiedad(resumen,'operadorSalienteNombre','OperadorSalienteNombre')));
+            setTextoCambioTurno('turnCantidadOK',numeroCambioTurno(propiedad(resumen,'cantidadOK','CantidadOK')));
+            setTextoCambioTurno('turnCantidadScrap',numeroCambioTurno(propiedad(resumen,'cantidadScrap','CantidadScrap')));
+            setTextoCambioTurno('turnTotalCajas',numeroCambioTurno(propiedad(resumen,'totalCajas','TotalCajas')));
+            setTextoCambioTurno('turnCajasEntregadas',numeroCambioTurno(propiedad(resumen,'totalCajasEntregadas','TotalCajasEntregadas')));
             const cajasPendientes=Number(propiedad(resumen,'totalCajasPendientes','TotalCajasPendientes')||0);
-            document.getElementById('turnCajasPendientes').textContent=numeroCambioTurno(cajasPendientes);
+            setTextoCambioTurno('turnCajasPendientes',numeroCambioTurno(cajasPendientes));
             const badgePendientes=document.getElementById('badgeCajasPendientes');
             if(badgePendientes){
                 badgePendientes.className=cajasPendientes>0?'danger':'ok';
@@ -4046,14 +4067,14 @@ else
             const tecnicoMeta=document.getElementById('turnTecnicoMeta');
             const tecnicoObservacion=document.getElementById('turnTecnicoObservacion');
             if(operadorSugeridoId&&sugeridoBox){
-                document.getElementById('turnOperadorSugerido').textContent=textoSeguro(operadorSugeridoNombre);
+                setTextoCambioTurno('turnOperadorSugerido',textoSeguro(operadorSugeridoNombre));
                 sugeridoBox.classList.toggle('technician',sugeridoPorTecnico);
                 if(sugeridoLabel)sugeridoLabel.textContent=sugeridoPorTecnico?'Operador sugerido por el técnico':'Operador sugerido según escala';
                 if(sugeridoIcono)sugeridoIcono.className=sugeridoPorTecnico?'fa-solid fa-user-gear':'fa-solid fa-calendar-check';
                 let detalle=sugeridoPorTecnico?'Sugerencia del técnico':'Según escala';
                 if(turnoSugeridoNombre)detalle+=' · Turno '+turnoSugeridoNombre;
                 if(!sugeridoPorTecnico&&escalaFolio)detalle+=' · '+escalaFolio;
-                document.getElementById('turnSugeridoDetalle').textContent=detalle;
+                setTextoCambioTurno('turnSugeridoDetalle',detalle);
                 if(tecnicoMeta){
                     if(sugeridoPorTecnico){
                         let meta='Sugerido por '+textoSeguro(tecnicoNombre,'Técnico de Producción');

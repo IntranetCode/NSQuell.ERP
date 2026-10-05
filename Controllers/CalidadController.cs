@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models;
+﻿using ERP.NSQuell.Models;
 using ERP.NSQuell.Models.ViewModels;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -221,6 +221,13 @@ namespace ERP.NSQuell.Controllers
             model.TotalPendienteLiberacionCaja = model.TotalCajasPendientes;
             model.TotalMostrados = grupo == "CAJAS" ? model.TotalCajasPendientes : model.Inspecciones.Count;
 
+            // NSQ_CALIDAD_CAJAS_INVENTARIO_LIBRE_INDEX_V1_1
+            if (grupo == "CAJAS")
+            {
+                ViewBag.CajasInventarioLibre =
+                    await CargarCajasInventarioLibreAsync(
+                        busqueda);
+            }
             ViewBag.GrupoCalidad = grupo;
 
             return View(model);

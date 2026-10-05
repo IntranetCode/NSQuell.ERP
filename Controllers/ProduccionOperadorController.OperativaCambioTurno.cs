@@ -33,6 +33,7 @@ public sealed partial class ProduccionOperadorController
         var usuarioId = ObtenerUsuarioID();
         var personaUsuarioId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
         var usuarioEsOperador = await UsuarioEsOperadorAsync(usuarioId, cn);
+        var usuarioPuedeSupervisarCambioTurno = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
         var programacion = await ObtenerProgramacionCambioTurnoOperativoAsync(
             contexto.ProgramaProduccionID,
             contexto.OperadorActualID,
@@ -82,6 +83,7 @@ public sealed partial class ProduccionOperadorController
             UsuarioID = usuarioId,
             PersonaUsuarioID = personaUsuarioId,
             UsuarioEsOperador = usuarioEsOperador,
+            UsuarioPuedeSupervisarCambioTurno = usuarioPuedeSupervisarCambioTurno,
             SoloLecturaSolicitado = soloLectura
         };
 
@@ -140,8 +142,10 @@ public sealed partial class ProduccionOperadorController
         {
             await cn.OpenAsync();
             var usuarioId = ObtenerUsuarioID();
-            if (!await UsuarioEsOperadorAsync(usuarioId, cn))
-                return StatusCode(StatusCodes.Status403Forbidden, new { ok = false, mensaje = "Solo el operador responsable puede entregar el turno." });
+            var usuarioEsOperador = await UsuarioEsOperadorAsync(usuarioId, cn);
+            var usuarioPuedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
+            if (!usuarioEsOperador && !usuarioPuedeSupervisar)
+                return StatusCode(StatusCodes.Status403Forbidden, new { ok = false, mensaje = "El usuario no tiene permisos para gestionar el cambio de turno." });
 
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0)
@@ -150,7 +154,7 @@ public sealed partial class ProduccionOperadorController
             var contexto = await ObtenerContextoCambioTurnoOperativoAsync(vm.EjecucionProduccionID, cn);
             if (contexto == null)
                 return NotFound(new { ok = false, mensaje = "No se encontró la ejecución de Producción." });
-            if (contexto.OperadorActualID != personaId.Value)
+            if (!usuarioPuedeSupervisar && contexto.OperadorActualID != personaId.Value)
                 return StatusCode(StatusCodes.Status403Forbidden, new { ok = false, mensaje = "La ejecución ya no está asignada al operador conectado." });
 
             var programacion = await ObtenerProgramacionCambioTurnoOperativoAsync(

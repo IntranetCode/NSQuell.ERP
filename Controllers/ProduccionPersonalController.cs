@@ -747,23 +747,13 @@ ORDER BY
 
         result.Auxiliares = await EjecutarCandidatosAsync(
             roleBase.Replace("{ROLE_FILTER}", @"(
-            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
-            OR EXISTS
             (
-                SELECT 1
-                FROM dbo.RRHH_EscalaAsignaciones ax
-                INNER JOIN dbo.RRHH_FuncionesPersonal fx ON fx.FuncionID=ax.FuncionID AND fx.Activo=1
-                WHERE ax.Activo=1
-                  AND ax.PersonalID=p.PersonaID
-                  AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%AUXILIAR%'
+                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
+                AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
             )
-        )").Replace("{POL_FILTER}", "1=1"),
-            programa.ParteID, turno, fechaTrabajo, programa.MaquinaID, cn);
-
-        result.Tecnicos = await EjecutarCandidatosAsync(
-            roleBase.Replace("{ROLE_FILTER}", @"(
+            OR
             (
-                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
+                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%ENCARGAD%'
                 AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
             )
             OR EXISTS
@@ -773,8 +763,48 @@ ORDER BY
                 INNER JOIN dbo.RRHH_FuncionesPersonal fx ON fx.FuncionID=ax.FuncionID AND fx.Activo=1
                 WHERE ax.Activo=1
                   AND ax.PersonalID=p.PersonaID
-                  AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%TECNIC%'
-                  AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%PRODU%'
+                  AND @Fecha BETWEEN CONVERT(date,ax.FechaInicio) AND CONVERT(date,ax.FechaFin)
+                  AND
+                  (
+                      (
+                          UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%AUXILIAR%'
+                          AND UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%PRODU%'
+                      )
+                      OR
+                      (
+                          UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%ENCARGAD%'
+                          AND UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%PRODU%'
+                      )
+                  )
+            )
+        )").Replace("{POL_FILTER}", "1=1"),
+            programa.ParteID, turno, fechaTrabajo, programa.MaquinaID, cn);
+
+        result.Tecnicos = await EjecutarCandidatosAsync(
+            roleBase.Replace("{ROLE_FILTER}", @"(
+            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%SMED%'
+            OR
+            (
+                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
+                AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%INYE%'
+            )
+            OR EXISTS
+            (
+                SELECT 1
+                FROM dbo.RRHH_EscalaAsignaciones ax
+                INNER JOIN dbo.RRHH_FuncionesPersonal fx ON fx.FuncionID=ax.FuncionID AND fx.Activo=1
+                WHERE ax.Activo=1
+                  AND ax.PersonalID=p.PersonaID
+                  AND @Fecha BETWEEN CONVERT(date,ax.FechaInicio) AND CONVERT(date,ax.FechaFin)
+                  AND
+                  (
+                      UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%SMED%'
+                      OR
+                      (
+                          UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%TECNIC%'
+                          AND UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%INYE%'
+                      )
+                  )
             )
         )").Replace("{POL_FILTER}", "1=1"),
             programa.ParteID, turno, fechaTrabajo, programa.MaquinaID, cn);
@@ -873,27 +903,44 @@ THEN 1 ELSE 0 END);";
             )
         )",
             "AUXILIAR" => @"(
-            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
-            OR EXISTS
             (
-                SELECT 1 FROM dbo.RRHH_EscalaAsignaciones a
-                INNER JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
-                WHERE a.Activo=1 AND a.PersonalID=p.PersonaID AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%AUXILIAR%'
+                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
+                AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
             )
-        )",
-            "TECNICO" => @"(
+            OR
             (
-                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
+                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%ENCARGAD%'
                 AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
             )
             OR EXISTS
             (
                 SELECT 1 FROM dbo.RRHH_EscalaAsignaciones a
                 INNER JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
-                WHERE a.Activo=1
-                  AND a.PersonalID=p.PersonaID
-                  AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%TECNIC%'
-                  AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%PRODU%'
+                WHERE a.Activo=1 AND a.PersonalID=p.PersonaID
+                  AND (
+                      (UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%AUXILIAR%' AND UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%PRODU%')
+                      OR
+                      (UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%ENCARGAD%' AND UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%PRODU%')
+                  )
+            )
+        )",
+            "TECNICO" => @"(
+            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%SMED%'
+            OR
+            (
+                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
+                AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%INYE%'
+            )
+            OR EXISTS
+            (
+                SELECT 1 FROM dbo.RRHH_EscalaAsignaciones a
+                INNER JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
+                WHERE a.Activo=1 AND a.PersonalID=p.PersonaID
+                  AND (
+                      UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%SMED%'
+                      OR
+                      (UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%TECNIC%' AND UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%INYE%')
+                  )
             )
         )",
             "SMED" => @"(
