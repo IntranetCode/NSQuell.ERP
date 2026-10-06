@@ -772,21 +772,10 @@ ORDER BY
                 "Corrige los datos tecnicos antes de programarlas juntas.");
         }
 
-        if (principal.MaquinaID.HasValue)
-        {
-            var maquinaCompatiblePareja = await MaquinaCompatibleConParteAsync(
-                pareja.ParteID,
-                principal.MaquinaID.Value,
-                cn,
-                tx);
-
-            if (!maquinaCompatiblePareja)
-            {
-                throw new InvalidOperationException(
-                    "La maquina seleccionada para la parte principal no esta configurada " +
-                    "como principal o sustituta directa de la contraparte LH/RH.");
-            }
-        }
+        // NSQ_DISPONIBILIDAD_MAQUINA_Y_SELECCION_LIBRE_V1_2
+        // Principal y sustitutas son referencias tecnicas, no una restriccion de Planeacion.
+        // Se permite seleccionar otra maquina activa. En una pareja LH/RH ambos programas
+        // conservaran la misma maquina elegida por Planeacion.
 
         // NSQ_LHRH_CANTIDAD_CANONICA_V1_0
         // Cuando Planeacion solicita LH + RH juntas, ambos programas deben usar

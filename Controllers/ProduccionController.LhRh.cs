@@ -201,12 +201,31 @@ SELECT TOP(1)
     e.EstatusID,
     e.FechaInicioReal
 FROM dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp WITH(UPDLOCK,HOLDLOCK)
+    ON pp.ProgramaProduccionID=e.ProgramaProduccionID
+   AND pp.Activo=1
 WHERE e.Activo=1
   AND e.MaquinaID=@MaquinaID
   AND e.ProgramaProduccionID<>@ProgramaProduccionID
   AND (@ProgramaParejaLhRhID IS NULL OR e.ProgramaProduccionID<>@ProgramaParejaLhRhID)
   AND e.FechaLiberacionMaquina IS NULL
+  AND e.FechaFinReal IS NULL
   AND e.EstatusID IN(@EnPreparacion,@EnProduccion,@Pausado)
+  AND
+  (
+      e.EstatusID<>@EnProduccion
+      OR pp.FechaFinProgramada IS NULL
+      OR pp.FechaFinProgramada>GETDATE()
+      OR EXISTS
+      (
+          SELECT 1
+          FROM dbo.Produccion_TiempoExtra te WITH(UPDLOCK,HOLDLOCK)
+          WHERE te.EjecucionProduccionID=e.EjecucionProduccionID
+            AND te.Activo=1
+            AND te.FechaHoraFin IS NULL
+            AND UPPER(LTRIM(RTRIM(ISNULL(te.Estado,N'')))) IN(N'EN_CURSO',N'PAUSADO')
+      )
+  ) /* NSQ_DISPONIBILIDAD_MAQUINA_Y_SELECCION_LIBRE_V1_2 */
   AND NOT
   (
       e.EstatusID=@Pausado

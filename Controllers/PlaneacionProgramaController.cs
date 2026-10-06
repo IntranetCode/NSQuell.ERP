@@ -4108,6 +4108,18 @@ Compatibles AS
 SELECT
     m.MaquinaID AS Id,
     m.Codigo + ' | ' + ISNULL(m.Nombre, '') AS Texto,
+    CASE
+        WHEN m.MaquinaID=(SELECT TOP(1) MaquinaPrincipalID FROM DatosTecnicos)
+            THEN N'PRINCIPAL'
+        WHEN EXISTS
+        (
+            SELECT 1
+            FROM Compatibles cr
+            WHERE cr.MaquinaID=m.MaquinaID
+        )
+            THEN N'SUSTITUTA'
+        ELSE N'OTRA'
+    END AS TipoRelacion, /* NSQ_DISPONIBILIDAD_MAQUINA_Y_SELECCION_LIBRE_V1_2 */
     CAST(
         CASE
             WHEN EXISTS
@@ -4163,13 +4175,16 @@ ORDER BY
                 var id = Convert.ToInt32(rd["Id"]);
                 var ocupada = rd["Ocupada"] != DBNull.Value && Convert.ToBoolean(rd["Ocupada"]);
                 var texto = rd["Texto"]?.ToString() ?? id.ToString();
+                var tipoRelacion = rd["TipoRelacion"] == DBNull.Value
+                    ? "OTRA"
+                    : rd["TipoRelacion"]?.ToString()?.Trim() ?? "OTRA";
 
                 lista.Add(new SelectListItem
                 {
                     Value = id.ToString(),
                     Text = ocupada
-                        ? texto + "  — OCUPADA EN ESTE HORARIO"
-                        : texto + "  — LIBRE",
+                        ? texto + "  — " + tipoRelacion + "  — OCUPADA EN ESTE HORARIO"
+                        : texto + "  — " + tipoRelacion + "  — LIBRE",
                     Disabled = false,
                     Selected = maquinaSeleccionadaId.HasValue &&
                                maquinaSeleccionadaId.Value == id

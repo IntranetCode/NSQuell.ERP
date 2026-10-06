@@ -9,6 +9,9 @@
     var validado = Model.EstatusID == ProduccionChecklistEstatus.ValidadoPorCalidad;
     var rechazado = Model.EstatusID == ProduccionChecklistEstatus.RechazadoRequiereAjuste;
     var secciones = Model.Secciones
+        // NSQ_CHECKLIST_ARRANQUE_OPERATIVA_FILTRO_PARO_V1_2
+        // El checklist de ARRANQUE no debe mezclar preguntas del flujo PARO.
+        .Where(s => !((s.Seccion ?? string.Empty).Contains("PARO", StringComparison.OrdinalIgnoreCase)))
         .Select(s => new
         {
             Seccion = s,

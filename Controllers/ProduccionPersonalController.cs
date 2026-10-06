@@ -786,7 +786,11 @@ ORDER BY
             OR
             (
                 UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
-                AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%INYE%'
+                AND
+                (
+                    UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%INYE%'
+                    OR UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
+                ) /* NSQ_PERSONAL_TECNICOS_PRODUCCION_INYECCION_V1_1 */
             )
             OR EXISTS
             (
@@ -802,7 +806,11 @@ ORDER BY
                       OR
                       (
                           UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%TECNIC%'
-                          AND UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%INYE%'
+                          AND
+                          (
+                              UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%INYE%'
+                              OR UPPER(LTRIM(RTRIM(ISNULL(fx.Nombre,N'')))) LIKE N'%PRODU%'
+                          )
                       )
                   )
             )
@@ -929,7 +937,11 @@ THEN 1 ELSE 0 END);";
             OR
             (
                 UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
-                AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%INYE%'
+                AND
+                (
+                    UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%INYE%'
+                    OR UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
+                ) /* NSQ_PERSONAL_TECNICOS_PRODUCCION_INYECCION_V1_1 */
             )
             OR EXISTS
             (
@@ -939,7 +951,12 @@ THEN 1 ELSE 0 END);";
                   AND (
                       UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%SMED%'
                       OR
-                      (UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%TECNIC%' AND UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%INYE%')
+                      (UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%TECNIC%'
+                          AND
+                          (
+                              UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%INYE%'
+                              OR UPPER(LTRIM(RTRIM(ISNULL(f.Nombre,N'')))) LIKE N'%PRODU%'
+                          ))
                   )
             )
         )",
