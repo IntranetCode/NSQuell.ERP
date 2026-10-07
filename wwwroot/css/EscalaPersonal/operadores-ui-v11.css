@@ -1,0 +1,7 @@
+﻿/* NSQ_RRHH_OPERADORES_UI_V1_1 */
+.rh-op-action{display:inline-flex!important;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:7px 11px!important;border-radius:9px!important;border:1px solid transparent!important;font-size:.78rem!important;line-height:1.15!important;font-weight:800!important;text-decoration:none!important;cursor:pointer;transition:background .16s ease,border-color .16s ease,transform .16s ease,box-shadow .16s ease}
+.rh-op-action:hover{transform:translateY(-1px);text-decoration:none!important}
+.rh-op-reset{color:#175cd3!important;background:#eff8ff!important;border-color:#b2ddff!important}.rh-op-reset:hover{color:#1849a9!important;background:#dff2ff!important;box-shadow:0 4px 12px rgba(23,92,211,.12)}
+.rh-op-danger{color:#b42318!important;background:#fff1f3!important;border-color:#fda29b!important}.rh-op-danger:hover{color:#912018!important;background:#ffe4e8!important;box-shadow:0 4px 12px rgba(180,35,24,.10)}
+.rh-op-cancel{color:#243b5a!important;background:#fff!important;border-color:#b9c6d6!important;box-shadow:0 2px 8px rgba(16,24,40,.05)}.rh-op-cancel:hover{color:#14263f!important;background:#f4f7fb!important;border-color:#8fa3bb!important}
+.rh-op-primary{color:#fff!important;background:#f47b20!important;border-color:#f47b20!important;box-shadow:0 5px 14px rgba(244,123,32,.18)}.rh-op-primary:hover{color:#fff!important;background:#db6815!important;border-color:#db6815!important}

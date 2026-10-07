@@ -1,0 +1,51 @@
+﻿/* NSQ_RRHH_ESCALA_OPERADORES_INTEGRACION_V1_0 */
+.rhop-page{padding:24px 28px 48px;background:#f5f7fb;min-height:100vh;color:#172033}
+.rhop-header{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin:28px 0 20px}
+.rhop-eyebrow{font-size:.75rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#e87524;margin-bottom:6px}
+.rhop-header h1{font-size:2rem;margin:0 0 8px;font-weight:800}
+.rhop-header p{max-width:780px;margin:0;color:#667085;line-height:1.55}
+.rhop-btn{border:1px solid #d0d5dd;background:#fff;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer}
+.rhop-btn-primary{background:#172033;color:#fff;border-color:#172033}
+.rhop-alert{padding:13px 16px;border-radius:10px;margin:12px 0;font-weight:600;white-space:pre-line}
+.rhop-alert-success{background:#ecfdf3;color:#067647;border:1px solid #abefc6}
+.rhop-alert-error{background:#fef3f2;color:#b42318;border:1px solid #fecdca}
+.rhop-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
+.rhop-stats article{background:#fff;border:1px solid #e4e7ec;border-radius:14px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center}
+.rhop-stats span{color:#667085;font-size:.88rem;font-weight:650}
+.rhop-stats strong{font-size:1.45rem}
+.rhop-panel{background:#fff;border:1px solid #e4e7ec;border-radius:16px;overflow:hidden}
+.rhop-panel-head{display:flex;justify-content:space-between;gap:20px;padding:20px;border-bottom:1px solid #eaecf0}
+.rhop-panel-head h2{margin:0 0 5px;font-size:1.15rem}
+.rhop-panel-head p{margin:0;color:#667085;font-size:.9rem}
+.rhop-filters{display:flex;gap:10px;align-items:center}
+.rhop-filters input,.rhop-filters select,.rhop-form-grid input{border:1px solid #d0d5dd;border-radius:9px;padding:10px 12px;background:#fff}
+.rhop-filters input{min-width:300px}
+.rhop-table-wrap{overflow:auto}
+.rhop-table{width:100%;border-collapse:collapse;min-width:940px}
+.rhop-table th{padding:12px 16px;background:#f9fafb;color:#475467;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;text-align:left}
+.rhop-table td{padding:15px 16px;border-top:1px solid #f0f2f5;vertical-align:middle}
+.rhop-table td small{display:block;color:#667085;margin-top:3px}
+.rhop-name,.rhop-user{font-weight:750}
+.rhop-table small.ok{color:#067647}.rhop-table small.warn{color:#b54708}
+.rhop-badge{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:.78rem;font-weight:800}
+.rhop-badge-ok{background:#ecfdf3;color:#067647}.rhop-badge-off{background:#f2f4f7;color:#475467}.rhop-badge-warn{background:#fffaeb;color:#b54708}
+.rhop-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap}
+.rhop-actions form{margin:0}
+.rhop-link{border:0;background:none;padding:0;color:#344054;font-weight:750;cursor:pointer}
+.rhop-link.danger{color:#b42318}.rhop-link.success{color:#067647}
+.rhop-empty{padding:30px;text-align:center;color:#667085}
+.rhop-note{margin-top:16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:15px 18px;display:flex;gap:12px;align-items:flex-start}
+.rhop-note strong{white-space:nowrap;color:#9a3412}.rhop-note span{color:#7c2d12}
+.rhop-modal{position:fixed;inset:0;background:rgba(16,24,40,.48);z-index:2000;display:grid;place-items:center;padding:20px}
+.rhop-modal[hidden]{display:none}
+.rhop-modal-card{width:min(720px,100%);background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(16,24,40,.26);overflow:hidden}
+.rhop-modal-card header{display:flex;justify-content:space-between;gap:18px;padding:20px 22px;border-bottom:1px solid #eaecf0}
+.rhop-modal-card h2{margin:0 0 5px}.rhop-modal-card header p{margin:0;color:#667085}
+.rhop-modal-card header button{border:0;background:none;font-size:1.8rem;cursor:pointer;color:#667085}
+.rhop-form-grid{padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.rhop-form-grid .full{grid-column:1/-1}.rhop-form-grid label{display:block;font-weight:750;margin-bottom:6px}
+.rhop-form-grid input{width:100%}.rhop-form-grid small{display:block;color:#667085;margin-top:5px}
+.rhop-modal-card footer{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid #eaecf0}
+.rhop-modal-open{overflow:hidden}
+@media(max-width:900px){.rhop-stats{grid-template-columns:1fr 1fr}.rhop-panel-head,.rhop-header{flex-direction:column}.rhop-filters{width:100%;flex-direction:column}.rhop-filters input,.rhop-filters select{width:100%;min-width:0}}
+@media(max-width:620px){.rhop-page{padding:16px}.rhop-stats{grid-template-columns:1fr}.rhop-form-grid{grid-template-columns:1fr}.rhop-form-grid .full{grid-column:auto}}

@@ -116,46 +116,48 @@
 
     @if (Model.PuedeAdministrar)
     {
-        <nav class="ep-tools" aria-label="Configuración del módulo">
-            <a asp-action="Turnos" class="ep-tool">
-                <span class="ep-tool-mark">TU</span>
-                <span>
-                    <span class="ep-tool-title">Configurar turnos</span>
-                    <span class="ep-tool-text d-block">
-                        Edita horarios regulares, mixtos y especiales.
-                    </span>
-                </span>
-            </a>
-            <a asp-action="Funciones" class="ep-tool">
-                <span class="ep-tool-mark">FR</span>
-                <span>
-                    <span class="ep-tool-title">Configurar funciones</span>
-                    <span class="ep-tool-text d-block">
-                        Administra roles y requerimientos por departamento.
-                    </span>
-                </span>
-            </a>
+        <nav class="ep-tools" aria-label="Acciones de Recursos Humanos">
             <a asp-action="Crear" class="ep-tool">
-                <span class="ep-tool-mark">NS</span>
+                <span class="ep-tool-mark">SE</span>
                 <span>
-                    <span class="ep-tool-title">Preparar nueva semana</span>
+                    <span class="ep-tool-title">Programar semana</span>
                     <span class="ep-tool-text d-block">
-                        Genera el encabezado y selecciona los turnos aplicables.
+                        Selecciona la semana, revisa horarios y asigna operadores.
                     </span>
                 </span>
             </a>
+
+            <a asp-action="Operadores" class="ep-tool">
+                <span class="ep-tool-mark">OP</span>
+                <span>
+                    <span class="ep-tool-title">Operadores</span>
+                    <span class="ep-tool-text d-block">
+                        Altas, bajas, cuentas ERP y estado del personal.
+                    </span>
+                </span>
+            </a>
+
             <a asp-action="Polivalencia" class="ep-tool">
                 <span class="ep-tool-mark">PV</span>
                 <span>
                     <span class="ep-tool-title">Matriz de polivalencia</span>
                     <span class="ep-tool-text d-block">
-                        Consulta operadores evaluados por número de parte y nivel N1–N4.
+                        Importa y consulta niveles N1–N4 por número de parte.
+                    </span>
+                </span>
+            </a>
+
+            <a asp-action="Turnos" class="ep-tool">
+                <span class="ep-tool-mark">HR</span>
+                <span>
+                    <span class="ep-tool-title">Horarios base</span>
+                    <span class="ep-tool-text d-block">
+                        Configuración avanzada. Normalmente no necesitas modificarla cada semana.
                     </span>
                 </span>
             </a>
         </nav>
     }
-
     <section class="ep-panel">
         <div class="ep-panel-head">
             <h2 class="ep-panel-title">Programaciones registradas</h2>

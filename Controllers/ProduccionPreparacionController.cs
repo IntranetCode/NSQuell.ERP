@@ -335,19 +335,18 @@ AND Estado IN(@EstadoPendiente,@EstadoEnProceso);";
                     TempData["Error"] = esPareja ? "Las dos tareas LH/RH deben estar EN PROCESO para finalizar el cambio de molde. No se realizará un cierre parcial." : "Solo puedes finalizar un cambio de molde que esté EN PROCESO.";
                     return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
                 }
-                var checklist = await ObtenerChecklistCambioMoldePorPreparacionAsync(vm.PreparacionAnticipadaID, cn, tx);
-                if (checklist == null)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "No existe el checklist GQ-F-PR01-03 para este cambio de molde. Debes atender la actividad A1 antes de finalizar.";
-                    return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
-                }
-                if (!checklist.EstaCompleto)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = $"El checklist GQ-F-PR01-03 todavía no está completo. Avance actual: {checklist.TextoAvance}. Debes completar y finalizar la actividad A1 antes de cerrar el cambio de molde.";
-                    return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
-                }
+                // NSQ_CAMBIO_MOLDE_CHECKLIST_NO_BLOQUEA_PREPARACION_V1_0
+                // El checklist GQ-F-PR01-03 sigue siendo visible y trazable,
+                // pero ya NO bloquea la confirmacion del cambio fisico ni el
+                // posterior inicio de preparacion de Produccion.
+                var checklist = await ObtenerOCrearChecklistCambioMoldeAsync(
+                    vm.PreparacionAnticipadaID,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                var checklistCambioMoldePendiente = !checklist.EstaCompleto;
+                var avanceChecklistCambioMolde = checklist.TextoAvance;
                 var fechasInicio = tareas.Where(x => x.FechaInicioReal.HasValue).Select(x => x.FechaInicioReal!.Value).OrderBy(x => x).ToList();
                 if (fechasInicio.Count != tareas.Count)
                 {
@@ -407,10 +406,29 @@ AND Estado=@EstadoEnProceso;";
 
                 await CambioMoldeService.ConfirmarCambioAsync(origen.ProgramaProduccionID, null, usuarioId, cn, tx);
                 await tx.CommitAsync();
-                if (esPareja)
-                    TempData[excedioLimite ? "Warning" : "Success"] = excedioLimite ? $"Cambio de molde LH/RH finalizado para ambas OF en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido." : $"Cambio de molde LH/RH finalizado correctamente para ambas OF en {duracionMinutos} minutos.";
-                else
-                    TempData[excedioLimite ? "Warning" : "Success"] = excedioLimite ? $"Cambio de molde finalizado en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido." : $"Cambio de molde finalizado correctamente en {duracionMinutos} minutos. Límite de la máquina: {limiteMinutos} minutos.";
+
+                var mensajeCambioMolde =
+                    esPareja
+                        ? excedioLimite
+                            ? $"Cambio de molde LH/RH finalizado para ambas OF en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido."
+                            : $"Cambio de molde LH/RH finalizado correctamente para ambas OF en {duracionMinutos} minutos."
+                        : excedioLimite
+                            ? $"Cambio de molde finalizado en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido."
+                            : $"Cambio de molde finalizado correctamente en {duracionMinutos} minutos. Límite de la máquina: {limiteMinutos} minutos.";
+
+                if (checklistCambioMoldePendiente)
+                {
+                    mensajeCambioMolde +=
+                        $" Checklist GQ-F-PR01-03 pendiente ({avanceChecklistCambioMolde}). " +
+                        "El checklist no bloquea el inicio de preparación, pero debe completarse para conservar la trazabilidad.";
+                }
+
+                TempData[
+                    excedioLimite || checklistCambioMoldePendiente
+                        ? "Warning"
+                        : "Success"
+                ] = mensajeCambioMolde;
+
                 return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
             }
             catch (Exception ex)

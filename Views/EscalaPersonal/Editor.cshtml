@@ -23,12 +23,14 @@
 
 @section Scripts {
     <script src="~/js/shared/nsq-dynamic-style.js" asp-append-version="true"></script>
+    <script src="~/js/EscalaPersonal/operadores-semana-rapida-v11.js" asp-append-version="true"></script>
 }
 
 
 @section Styles {
     <link rel="stylesheet" href="~/css/EscalaPersonal/escala-navegacion.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/EscalaPersonal/editor.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/EscalaPersonal/operadores-semana-rapida-v11.css" asp-append-version="true" />
 }
 
 
@@ -170,12 +172,14 @@
         </p>
     </div>
 
+    @* NSQ_RRHH_ESCALA_OPERADORES_RAPIDA_V1_1 *@
+    <partial name="_OperadoresSemanaRapidaV11" />
     <section class="ee-board">
         <div class="ee-board-head">
             <div>
-                <h2 class="ee-board-title">Distribución semanal del personal</h2>
+                <h2 class="ee-board-title">Detalle y ajustes individuales</h2>
                 <p class="ee-board-help">
-                    Las columnas corresponden a los horarios creados en esta escala.
+                    Consulta el detalle por horario. Para la programación normal de operadores usa la tabla rápida superior.
                 </p>
             </div>
 
@@ -223,7 +227,7 @@
                 <div class="ee-empty-mark">+</div>
                 <h3 class="ee-empty-title">Aún no hay personal asignado</h3>
                 <p class="ee-empty-text">
-                    Comienza agregando una persona y selecciona la función, máquina y horario que le corresponden.
+                    La programación principal se realiza arriba. Usa este detalle únicamente para una excepción individual de fechas o condiciones.
                 </p>
                 @if (Model.PuedeEditar)
                 {
@@ -482,10 +486,10 @@
                     <div class="ee-modal-head">
                         <div>
                             <h2 class="ee-modal-title" id="assignmentModalTitle">
-                                Agregar persona a la escala
+                                Asignar operador a la semana
                             </h2>
                             <p class="ee-modal-subtitle">
-                                Completa la asignación de trabajo para esta semana.
+                                Selecciona operador y horario. La máquina es únicamente una preferencia para Producción/Planeación.
                             </p>
                         </div>
                         <button type="button"
@@ -510,13 +514,13 @@
 
                                 <label for="personalId"
                                        class="ee-label ee-label-required">
-                                    Persona
+                                    Operador
                                 </label>
                                 <select name="PersonalID"
                                         id="personalId"
                                         class="ee-control"
                                         required>
-                                    <option value="">Selecciona una persona</option>
+                                    <option value="">Selecciona un operador</option>
                                     @foreach (var persona in Model.Personas)
                                     {
                                         <option value="@persona.PersonalID"
@@ -534,7 +538,7 @@
                             <div class="ee-col-6">
                                 <label for="functionId"
                                        class="ee-label ee-label-required">
-                                    Función o rol
+                                    Tipo de personal
                                 </label>
                                 <select name="FuncionID"
                                         id="functionId"
@@ -550,18 +554,18 @@
                                     }
                                 </select>
                                 <p class="ee-field-help">
-                                    Se muestran todas las funciones activas disponibles.
+                                    Este flujo está limitado a OPERADORES para evitar asignaciones incorrectas.
                                 </p>
                             </div>
 
                             <div class="ee-col-6">
                                 <label for="machineId" class="ee-label">
-                                    Máquina
+                                    Máquina preferente (opcional)
                                 </label>
                                 <select name="MaquinaID"
                                         id="machineId"
                                         class="ee-control">
-                                    <option value="">No aplica</option>
+                                    <option value="">Sin preferencia de máquina</option>
                                     @foreach (var maquina in Model.Maquinas)
                                     {
                                         <option value="@maquina.MaquinaID"

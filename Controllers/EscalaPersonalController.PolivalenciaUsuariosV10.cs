@@ -38,6 +38,8 @@ public partial class EscalaPersonalController
         public int? DepartamentoIDActual { get; set; }
         public bool UsuarioActivo { get; set; }
         public bool GestionadoPorMatriz { get; set; }
+        public bool PersonaActiva { get; set; }
+        public DateTime? FechaBajaPersona { get; set; }
     }
 
     // NSQ_POLIVALENCIA_V10_1_AVISO_DETALLE_USUARIOS
@@ -220,7 +222,9 @@ SELECT
     u.RolID,
     u.DepartamentoID,
     ISNULL(u.Activo,0) AS UsuarioActivo,
-    ISNULL(u.GestionadoPorMatrizPolivalencia,0) AS GestionadoPorMatriz
+    ISNULL(u.GestionadoPorMatrizPolivalencia,0) AS GestionadoPorMatriz,
+    ISNULL(p.EsColaboradorActivo,0) AS PersonaActiva,
+    p.FechaBaja AS FechaBajaPersona
 FROM dbo.Persona p
 LEFT JOIN dbo.Usuarios u ON u.PersonaID=p.PersonaID
 WHERE p.PersonaID IN ({string.Join(",", parametros)})
@@ -244,7 +248,10 @@ ORDER BY p.PersonaID,u.UsuarioID;";
                     RolIDActual = rd["RolID"] == DBNull.Value ? null : Convert.ToInt32(rd["RolID"]),
                     DepartamentoIDActual = rd["DepartamentoID"] == DBNull.Value ? null : Convert.ToInt32(rd["DepartamentoID"]),
                     UsuarioActivo = Convert.ToBoolean(rd["UsuarioActivo"]),
-                    GestionadoPorMatriz = Convert.ToBoolean(rd["GestionadoPorMatriz"])
+                    GestionadoPorMatriz = Convert.ToBoolean(rd["GestionadoPorMatriz"]),
+                    PersonaActiva = Convert.ToBoolean(rd["PersonaActiva"]),
+                    FechaBajaPersona = rd["FechaBajaPersona"] == DBNull.Value
+                        ? null : Convert.ToDateTime(rd["FechaBajaPersona"])
                 });
             }
         }
@@ -329,6 +336,28 @@ ORDER BY UsuarioID;";
             var persona = personasDb[id];
             var username = usernames[id];
 
+            // NSQ_RRHH_ESCALA_OPERADORES_INTEGRACION_V1_0
+            // Una baja explícita registrada por RH es autoridad administrativa.
+            // Una matriz de Polivalencia vieja NO debe resucitar al colaborador.
+            if (!persona.PersonaActiva && persona.FechaBajaPersona.HasValue)
+            {
+                if (persona.UsuarioID.HasValue && persona.UsuarioActivo)
+                {
+                    const string bajaPorRhSql = @"
+UPDATE dbo.Usuarios
+SET Activo=0
+WHERE UsuarioID=@UsuarioID;";
+
+                    await using var bajaPorRhCmd =
+                        new SqlCommand(bajaPorRhSql, cn, tx);
+                    bajaPorRhCmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                        persona.UsuarioID.Value;
+                    await bajaPorRhCmd.ExecuteNonQueryAsync();
+                }
+
+                continue;
+            }
+
             const string personaOnSql = @"
 UPDATE dbo.Persona
 SET Puesto=@Puesto,
@@ -381,8 +410,7 @@ VALUES
             var requiereNormalizacion =
                 !string.Equals(persona.UsernameActual, username, StringComparison.OrdinalIgnoreCase)
                 || persona.RolIDActual != 4
-                || persona.DepartamentoIDActual != departamentoProduccionId
-                || !persona.GestionadoPorMatriz;
+                || persona.DepartamentoIDActual != departamentoProduccionId;
 
             if (!persona.UsuarioActivo)
             {
@@ -405,8 +433,9 @@ UPDATE dbo.Usuarios
 SET Username=@Username,
     RolID=4,
     Activo=1,
-    DepartamentoID=@DepartamentoID,
-    GestionadoPorMatrizPolivalencia=1
+    DepartamentoID=@DepartamentoID
+    -- No se fuerza GestionadoPorMatrizPolivalencia=1 para cuentas
+    -- que fueron creadas/administradas manualmente por RH.
 WHERE UsuarioID=@UsuarioID;";
 
             await using var updateCmd = new SqlCommand(updateSql, cn, tx);

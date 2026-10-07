@@ -194,6 +194,18 @@ public sealed partial class ProduccionPersonalController
                 var mismaMaquina = asignacionesMomento.Any(x =>
                     x.MaquinaID.HasValue && x.MaquinaID.Value == programa.MaquinaID);
 
+                // NSQ_RRHH_ESCALA_OPERADORES_INTEGRACION_V1_0
+                // Si RH ya tiene una escala para la semana, solo se ofrecen
+                // operadores que realmente cubren la fecha/hora de la OF.
+                // Se conserva visible un operador ya asignado para no ocultar
+                // datos históricos y permitir que Producción lo corrija.
+                if (escala != null &&
+                    !enEscala &&
+                    programa.OperadorID != op.PersonaID)
+                {
+                    continue;
+                }
+
                 candidatos.Add(new ProduccionPersonalOperadorCandidatoVm
                 {
                     PersonaID = op.PersonaID,
@@ -315,6 +327,12 @@ public sealed partial class ProduccionPersonalController
             var oficialesSet = oficiales.Select(x => x.PersonaID).ToHashSet();
             var niveles = await CargarNivelesV2Async(cn, tx);
 
+            // NSQ_RRHH_ESCALA_OPERADORES_INTEGRACION_V1_0
+            var escalaRRHH = await CargarEscalaSemanaV2Async(semana, cn, tx);
+            var escalaOperadoresRRHH = escalaRRHH == null
+                ? new List<EscalaOperadorV2>()
+                : await CargarEscalaOperadoresV2Async(escalaRRHH.EscalaID, cn, tx);
+
             ValidarCoberturasTraslapadasV2(vm.Coberturas ?? new(), turnos);
 
             foreach (var cobertura in vm.Coberturas ?? new())
@@ -359,6 +377,22 @@ public sealed partial class ProduccionPersonalController
                     {
                         throw new InvalidOperationException(
                             $"El operador seleccionado para {programa.OF} ya no pertenece a la matriz operativa activa.");
+                    }
+
+                    if (escalaRRHH != null)
+                    {
+                        var disponibleEnHorario = escalaOperadoresRRHH.Any(x =>
+                            x.PersonaID == item.OperadorID.Value &&
+                            EscalaCubreMomentoV2(x, programa.Inicio));
+
+                        var yaEraOperadorDeLaOF =
+                            programa.OperadorID == item.OperadorID.Value;
+
+                        if (!disponibleEnHorario && !yaEraOperadorDeLaOF)
+                        {
+                            throw new InvalidOperationException(
+                                $"El operador seleccionado para {programa.OF} no está programado por RH en el horario de esta OF.");
+                        }
                     }
 
                     var parteTieneMatriz = programa.ParteID.HasValue &&
@@ -823,12 +857,30 @@ SELECT DISTINCT
         ISNULL(p.Nombre,N''),N' ',
         ISNULL(p.ApellidoPaterno,N''),N' ',
         ISNULL(p.ApellidoMaterno,N'')))) AS Nombre
-FROM dbo.RRHH_PolivalenciaCompetencias c
-INNER JOIN dbo.Persona p
-  ON p.PersonaID=c.PersonalID
- AND ISNULL(p.EsColaboradorActivo,1)=1
-WHERE c.Activo=1
-  AND UPPER(LTRIM(RTRIM(ISNULL(c.PuestoMatriz,N''))))=N'OPERADOR'
+FROM dbo.Persona p
+WHERE ISNULL(p.EsColaboradorActivo,1)=1
+  AND
+  (
+      UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Modern_Spanish_CI_AI LIKE N'%OPERADOR%'
+      OR EXISTS
+      (
+          SELECT 1
+          FROM dbo.RRHH_PolivalenciaCompetencias c
+          WHERE c.PersonalID=p.PersonaID
+            AND c.Activo=1
+            AND UPPER(LTRIM(RTRIM(ISNULL(c.PuestoMatriz,N''))))=N'OPERADOR'
+      )
+  )
+  AND EXISTS
+  (
+      SELECT 1
+      FROM dbo.Usuarios u
+      INNER JOIN dbo.Roles r ON r.RolID=u.RolID
+      WHERE u.PersonaID=p.PersonaID
+        AND ISNULL(u.Activo,0)=1
+        AND r.Activo=1
+        AND UPPER(LTRIM(RTRIM(r.NombreRol))) COLLATE Modern_Spanish_CI_AI=N'OPERADOR / CAPTURISTA'
+  )
 ORDER BY Nombre;";
 
         var lista = new List<OperadorOficialV2>();

@@ -1,0 +1,290 @@
+﻿@model ERP.NSQuell.Models.EscalaPersonalOperadoresRhVm
+@{
+    ViewData["Title"] = "Operadores - Recursos Humanos";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/EscalaPersonal/escala-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/EscalaPersonal/operadores.css" asp-append-version="true" />
+}
+
+<div class="container-fluid rhop-page">
+    <partial name="_EscalaNavegacion" />
+
+    <header class="rhop-header">
+        <div>
+            <div class="rhop-eyebrow">Recursos Humanos</div>
+            <h1>Operadores de Producción</h1>
+            <p>
+                Este listado es la fuente administrativa de altas y bajas. La polivalencia conserva las piezas y niveles de cada operador.
+            </p>
+        </div>
+        <button type="button" class="rhop-btn rhop-btn-primary" data-open-alta>
+            + Alta de operador
+        </button>
+    </header>
+
+    @if (TempData["Exito"] != null)
+    {
+        <div class="rhop-alert rhop-alert-success">@TempData["Exito"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="rhop-alert rhop-alert-error">@TempData["Error"]</div>
+    }
+
+    <section class="rhop-stats">
+        <article><span>Total</span><strong>@Model.Total</strong></article>
+        <article><span>Activos</span><strong>@Model.Activos</strong></article>
+        <article><span>Dados de baja</span><strong>@Model.Inactivos</strong></article>
+        <article><span>Cuenta ERP activa</span><strong>@Model.ConCuentaActiva</strong></article>
+    </section>
+
+    <section class="rhop-panel">
+        <div class="rhop-panel-head">
+            <div>
+                <h2>Directorio de operadores</h2>
+                <p>Dar de baja no elimina historial. El operador deja de aparecer como disponible para nuevas asignaciones.</p>
+            </div>
+            <div class="rhop-filters">
+                <input id="rhopSearch" type="search" placeholder="Buscar por nombre, control o usuario" />
+                <select id="rhopStatus">
+                    <option value="">Todos</option>
+                    <option value="activo">Activos</option>
+                    <option value="inactivo">Dados de baja</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="rhop-table-wrap">
+            <table class="rhop-table">
+                <thead>
+                    <tr>
+                        <th>No. control</th>
+                        <th>Operador</th>
+                        <th>Cuenta ERP</th>
+                        <th>Polivalencia</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="rhopRows">
+                @foreach (var op in Model.Operadores)
+                {
+                    var estado = op.PersonaActiva ? "activo" : "inactivo";
+                    var search = $"{op.NumeroControl} {op.NombreCompleto} {op.Username}".ToLowerInvariant();
+                    <tr data-rhop-row data-search="@search" data-status="@estado">
+                        <td>
+                            <strong>@(string.IsNullOrWhiteSpace(op.NumeroControl) ? "Sin control" : op.NumeroControl)</strong>
+                            <small>ID Persona @op.PersonaID</small>
+                        </td>
+                        <td>
+                            <span class="rhop-name">@op.NombreCompleto</span>
+                            <small>@(op.FechaIngreso.HasValue ? $"Ingreso {op.FechaIngreso:dd/MM/yyyy}" : "Fecha de ingreso no registrada")</small>
+                        </td>
+                        <td>
+                            @if (op.TieneCuenta)
+                            {
+                                <span class="rhop-user">@op.Username</span>
+                                <small class="@(op.UsuarioActivo ? "ok" : "warn")">
+                                    @(op.UsuarioActivo ? "Cuenta activa" : "Cuenta inactiva")
+                                    @if (op.DebeCambiarPassword)
+                                    {
+                                        <text> · cambio de contraseña pendiente</text>
+                                    }
+                                </small>
+                            }
+                            else
+                            {
+                                <span class="rhop-badge rhop-badge-warn">Sin cuenta ERP</span>
+                            }
+                        </td>
+                        <td>
+                            <strong>@op.PartesPolivalencia</strong>
+                            <small>pieza(s) con N1–N4</small>
+                        </td>
+                        <td>
+                            @if (op.PersonaActiva)
+                            {
+                                <span class="rhop-badge rhop-badge-ok">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="rhop-badge rhop-badge-off">Baja</span>
+                                @if (op.FechaBaja.HasValue)
+                                {
+                                    <small>@op.FechaBaja.Value.ToString("dd/MM/yyyy")</small>
+                                }
+                            }
+                        </td>
+                        <td>
+                            <div class="rhop-actions">
+                                @if (op.PersonaActiva && op.TieneCuenta)
+                                {
+                                    <form asp-action="RestablecerPasswordOperador"
+                                          method="post"
+                                          data-confirm="Restablecer la contraseña de @op.NombreCompleto?">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="personaID" value="@op.PersonaID" />
+                                        <button type="submit" class="rhop-link">Restablecer contraseña</button>
+                                    </form>
+                                }
+
+                                <form asp-action="CambiarEstadoOperador"
+                                      method="post"
+                                      data-confirm="@(op.PersonaActiva
+                                          ? $"Dar de baja a {op.NombreCompleto}? Ya no aparecerá para nuevas asignaciones."
+                                          : $"Reactivar a {op.NombreCompleto}?")">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="personaID" value="@op.PersonaID" />
+                                    <input type="hidden" name="activar" value="@((!op.PersonaActiva).ToString().ToLowerInvariant())" />
+                                    <button type="submit"
+                                            class="rhop-link @(op.PersonaActiva ? "danger" : "success")">
+                                        @(op.PersonaActiva ? "Dar de baja" : "Reactivar")
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <div id="rhopEmpty" class="rhop-empty" hidden>
+            No hay operadores que coincidan con los filtros.
+        </div>
+    </section>
+
+    <section class="rhop-note">
+        <strong>Cómo se conecta con Producción</strong>
+        <span>
+            RH asigna horario por semana en Programación semanal. Producción/Planeación verá únicamente operadores disponibles en ese horario. La máquina de RH se usa como preferencia, no como bloqueo.
+        </span>
+    </section>
+</div>
+
+<div class="rhop-modal" id="rhopAltaModal" hidden>
+    <div class="rhop-modal-card">
+        <form asp-action="AltaOperador" method="post">
+            @Html.AntiForgeryToken()
+            <header>
+                <div>
+                    <h2>Alta de operador</h2>
+                    <p>Se crea/reactiva la Persona y su cuenta ERP como Operador / Capturista.</p>
+                </div>
+                <button type="button" data-close-alta aria-label="Cerrar">×</button>
+            </header>
+
+            <div class="rhop-form-grid">
+                <div>
+                    <label>Número de control *</label>
+                    <input name="NumeroControl" maxlength="50" required autocomplete="off" />
+                </div>
+                <div>
+                    <label>Fecha de ingreso</label>
+                    <input name="FechaIngreso" type="date" />
+                </div>
+                <div>
+                    <label>Nombre *</label>
+                    <input name="Nombre" maxlength="150" required autocomplete="off" />
+                </div>
+                <div>
+                    <label>Apellido paterno *</label>
+                    <input name="ApellidoPaterno" maxlength="150" required autocomplete="off" />
+                </div>
+                <div>
+                    <label>Apellido materno</label>
+                    <input name="ApellidoMaterno" maxlength="150" autocomplete="off" />
+                </div>
+                <div>
+                    <label>Correo</label>
+                    <input name="Correo" type="email" maxlength="150" autocomplete="off" />
+                </div>
+                <div class="full">
+                    <label>Contraseña temporal</label>
+                    <input name="PasswordTemporal" maxlength="250" autocomplete="new-password"
+                           placeholder="Vacío = Quell + número de control + !" />
+                    <small>
+                        El operador deberá cambiarla en su primer inicio de sesión.
+                    </small>
+                </div>
+            </div>
+
+            <footer>
+                <button type="button" class="rhop-btn" data-close-alta>Cancelar</button>
+                <button type="submit" class="rhop-btn rhop-btn-primary">Crear operador y cuenta</button>
+            </footer>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(() => {
+    'use strict';
+
+    const modal = document.getElementById('rhopAltaModal');
+    const search = document.getElementById('rhopSearch');
+    const status = document.getElementById('rhopStatus');
+    const rows = [...document.querySelectorAll('[data-rhop-row]')];
+    const empty = document.getElementById('rhopEmpty');
+
+    const normalize = value => (value || '')
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+    function filter() {
+        const q = normalize(search?.value);
+        const s = status?.value || '';
+        let visible = 0;
+
+        rows.forEach(row => {
+            const show =
+                (!q || normalize(row.dataset.search).includes(q)) &&
+                (!s || row.dataset.status === s);
+
+            row.hidden = !show;
+            if (show) visible++;
+        });
+
+        if (empty) empty.hidden = visible !== 0;
+    }
+
+    document.querySelector('[data-open-alta]')?.addEventListener('click', () => {
+        modal.hidden = false;
+        document.body.classList.add('rhop-modal-open');
+        modal.querySelector('input[name="NumeroControl"]')?.focus();
+    });
+
+    document.querySelectorAll('[data-close-alta]').forEach(x => x.addEventListener('click', () => {
+        modal.hidden = true;
+        document.body.classList.remove('rhop-modal-open');
+    }));
+
+    modal?.addEventListener('click', e => {
+        if (e.target === modal) {
+            modal.hidden = true;
+            document.body.classList.remove('rhop-modal-open');
+        }
+    });
+
+    document.querySelectorAll('form[data-confirm]').forEach(form => {
+        form.addEventListener('submit', e => {
+            if (!window.confirm(form.dataset.confirm || '¿Continuar?'))
+                e.preventDefault();
+        });
+    });
+
+    search?.addEventListener('input', filter);
+    status?.addEventListener('change', filter);
+})();
+</script>
+}
+<!-- NSQ_RRHH_OPERADORES_UI_V1_1 -->
+<link rel="stylesheet" href="~/css/EscalaPersonal/operadores-ui-v11.css" asp-append-version="true" />
+<script src="~/js/EscalaPersonal/operadores-ui-v11.js" asp-append-version="true" defer></script>

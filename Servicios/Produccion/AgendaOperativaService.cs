@@ -201,7 +201,53 @@ ORDER BY CASE WHEN e.EjecucionProduccionID IS NOT NULL THEN 0 ELSE 1 END,pp.Fech
                     });
                 }
             }
-            var evaluaciones = await CambioMoldeService.EvaluarProgramasAsync(lista.Select(x => x.ProgramaProduccionID), cn, null, actualizarSnapshot: true);
+            // NSQ_FLUJO_OBLIGATORIO_MOLDE_SECADO_OPERATIVA_V1_0
+            // Para OF actuales/vencidas la fuente de verdad es el molde FISICO.
+            // Para OF futuras se conserva la proyeccion de Planeacion.
+            var idsFisicos = lista
+                .Where(x =>
+                    x.EjecucionProduccionID.HasValue ||
+                    (x.FechaInicioProgramada.HasValue && x.FechaInicioProgramada.Value <= ahora))
+                .Select(x => x.ProgramaProduccionID)
+                .Distinct()
+                .ToList();
+
+            var idsFisicosSet = idsFisicos.ToHashSet();
+
+            var idsProyeccion = lista
+                .Where(x => !idsFisicosSet.Contains(x.ProgramaProduccionID))
+                .Select(x => x.ProgramaProduccionID)
+                .Distinct()
+                .ToList();
+
+            var evaluaciones = new Dictionary<int, CambioMoldeEvaluacion>();
+
+            if (idsProyeccion.Count > 0)
+            {
+                var proyectadas = await CambioMoldeService.EvaluarProgramasAsync(
+                    idsProyeccion,
+                    cn,
+                    null,
+                    actualizarSnapshot: true,
+                    modo: CambioMoldeModoEvaluacion.ProyeccionPlaneacion);
+
+                foreach (var par in proyectadas)
+                    evaluaciones[par.Key] = par.Value;
+            }
+
+            if (idsFisicos.Count > 0)
+            {
+                var fisicas = await CambioMoldeService.EvaluarProgramasAsync(
+                    idsFisicos,
+                    cn,
+                    null,
+                    actualizarSnapshot: true,
+                    modo: CambioMoldeModoEvaluacion.FisicoActual);
+
+                foreach (var par in fisicas)
+                    evaluaciones[par.Key] = par.Value;
+            }
+
             foreach (var programa in lista)
                 if (evaluaciones.TryGetValue(programa.ProgramaProduccionID, out var evaluacion))
                     programa.RequiereCambioMolde = evaluacion.RequiereCambioMolde;
@@ -700,7 +746,7 @@ OUTER APPLY
             pasos.Add(EvaluarPlaneacion(p));
             pasos.Add(EvaluarPersonal(p));
             pasos.Add(EvaluarMaterial(p, insumo));
-            pasos.Add(EvaluarSecado(p, secado));
+            pasos.Add(EvaluarSecado(p, preparaciones, secado));
             pasos.Add(EvaluarEmbalaje(p, preparaciones, insumo));
             pasos.Add(EvaluarCambioMolde(p, preparaciones));
             pasos.Add(EvaluarInicioPreparacion(p, item));
@@ -786,10 +832,29 @@ OUTER APPLY
                 "Materiales",
                 p.ProgramaProduccionID);
         }
-        private static AgendaOperativaPasoVm EvaluarSecado(ProgramaBaseDto p, SecadoDto? s)
+        private static AgendaOperativaPasoVm EvaluarSecado(ProgramaBaseDto p, Dictionary<string, PreparacionDto>? preparaciones, SecadoDto? s)
         {
-            var aplica = !string.IsNullOrWhiteSpace(p.TipoSecado) && p.HorasSecado.GetValueOrDefault() > 0m;
-            if (!aplica) return PasoNoAplica(40, AgendaOperativaPasoClave.Secado, "Secado de material", AgendaOperativaArea.Secado, "La OF no tiene secado configurado.");
+            PreparacionDto? tareaSecado = null;
+            if (preparaciones != null)
+                preparaciones.TryGetValue("SECADO_MATERIAL", out tareaSecado);
+
+            var tareaSecadoVigente =
+                tareaSecado != null &&
+                !string.Equals(tareaSecado.Estado, "CANCELADA", StringComparison.OrdinalIgnoreCase);
+
+            var aplicaPorConfiguracion =
+                !string.IsNullOrWhiteSpace(p.TipoSecado) &&
+                p.HorasSecado.GetValueOrDefault() > 0m;
+
+            var aplica = aplicaPorConfiguracion || tareaSecadoVigente;
+
+            if (!aplica)
+                return PasoNoAplica(
+                    40,
+                    AgendaOperativaPasoClave.Secado,
+                    "Secado de material",
+                    AgendaOperativaArea.Secado,
+                    "La OF no tiene secado configurado ni una tarea de Secado vigente.");
 
             var requerido = Math.Max(0m, p.CantidadMpKg.GetValueOrDefault());
 
@@ -857,9 +922,21 @@ OUTER APPLY
         }
         private static AgendaOperativaPasoVm EvaluarCambioMolde(ProgramaBaseDto p, Dictionary<string, PreparacionDto>? preparaciones)
         {
-            if (!p.RequiereCambioMolde) return PasoNoAplica(60, AgendaOperativaPasoClave.CambioMolde, "Cambio de molde", AgendaOperativaArea.Smed, "La secuencia no requiere cambio de molde para esta OF.");
             PreparacionDto? tarea = null;
-            if (preparaciones != null) preparaciones.TryGetValue("CAMBIO_MOLDE", out tarea);
+            if (preparaciones != null)
+                preparaciones.TryGetValue("CAMBIO_MOLDE", out tarea);
+
+            var tareaVigente =
+                tarea != null &&
+                !string.Equals(tarea.Estado, "CANCELADA", StringComparison.OrdinalIgnoreCase);
+
+            if (!p.RequiereCambioMolde && !tareaVigente)
+                return PasoNoAplica(
+                    60,
+                    AgendaOperativaPasoClave.CambioMolde,
+                    "Cambio de molde",
+                    AgendaOperativaArea.Smed,
+                    "La fuente fisica/proyectada vigente no requiere cambio de molde para esta OF.");
             var confirmado = string.Equals(tarea?.Estado, "CONFIRMADA", StringComparison.OrdinalIgnoreCase);
             var enProceso = string.Equals(tarea?.Estado, "EN_PROCESO", StringComparison.OrdinalIgnoreCase);
             var estado = confirmado ? AgendaOperativaEstadoPaso.Completado : enProceso ? AgendaOperativaEstadoPaso.EnProceso : AgendaOperativaEstadoPaso.Pendiente;

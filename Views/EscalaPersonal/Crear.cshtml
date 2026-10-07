@@ -20,7 +20,7 @@
             <div class="ec-eyebrow">Escala de Personal</div>
             <h1 class="ec-title">Nueva programación semanal</h1>
             <p class="ec-subtitle">
-                Configura el documento, la semana y los horarios que se aplicarán.
+                Elige la semana y confirma los horarios de los operadores. Los datos documentales se generan automáticamente.
             </p>
         </div>
         <a asp-action="Index" class="ec-back">
@@ -37,6 +37,14 @@
         @Html.AntiForgeryToken()
         <input asp-for="Escala.Estado" type="hidden" />
 
+        @* NSQ_RRHH_ESCALA_OPERADORES_INTEGRACION_V1_0:
+           los metadatos documentales son automáticos; RH no necesita capturarlos. *@
+        <input asp-for="Escala.Folio" type="hidden" />
+        <input asp-for="Escala.CodigoDocumento" type="hidden" />
+        <input asp-for="Escala.VersionDocumento" type="hidden" />
+        <input asp-for="Escala.FechaElaboracion" type="hidden" />
+        <input asp-for="Escala.PeriodoTrabajo" type="hidden" />
+
         <div asp-validation-summary="ModelOnly"></div>
 
         <div class="ec-layout">
@@ -44,66 +52,6 @@
                 <section class="ec-card">
                     <div class="ec-card-head">
                         <div class="ec-step">Paso 1</div>
-                        <h2 class="ec-card-title">Datos del documento</h2>
-                    </div>
-                    <div class="ec-card-body">
-                        <div class="ec-grid">
-                            <div class="ec-col-4">
-                                <label asp-for="Escala.Folio"
-                                       class="ec-label ec-required"></label>
-                                <input asp-for="Escala.Folio"
-                                       class="ec-control"
-                                       readonly />
-                                <span asp-validation-for="Escala.Folio"></span>
-                                <p class="ec-help">Se genera automáticamente con el año y semana.</p>
-                            </div>
-                            <div class="ec-col-4">
-                                <label asp-for="Escala.CodigoDocumento"
-                                       class="ec-label ec-required"></label>
-                                <input asp-for="Escala.CodigoDocumento"
-                                       class="ec-control"
-                                       maxlength="30" />
-                                <span asp-validation-for="Escala.CodigoDocumento"></span>
-                            </div>
-                            <div class="ec-col-4">
-                                <label asp-for="Escala.VersionDocumento"
-                                       class="ec-label ec-required"></label>
-                                <input asp-for="Escala.VersionDocumento"
-                                       class="ec-control"
-                                       maxlength="10" />
-                                <span asp-validation-for="Escala.VersionDocumento"></span>
-                            </div>
-                            <div class="ec-col-4">
-                                <label asp-for="Escala.FechaElaboracion"
-                                       class="ec-label ec-required"></label>
-                                <input asp-for="Escala.FechaElaboracion"
-                                       type="date"
-                                       class="ec-control" />
-                                <span asp-validation-for="Escala.FechaElaboracion"></span>
-                            </div>
-                            <div class="ec-col-4">
-                                <label asp-for="Escala.PeriodoTrabajo"
-                                       class="ec-label ec-required"></label>
-                                <select asp-for="Escala.PeriodoTrabajo" class="ec-control">
-                                    <option value="Semanal">Semanal</option>
-                                </select>
-                                <span asp-validation-for="Escala.PeriodoTrabajo"></span>
-                            </div>
-                            <div class="ec-col-12">
-                                <label asp-for="Escala.Observaciones" class="ec-label"></label>
-                                <textarea asp-for="Escala.Observaciones"
-                                          class="ec-control"
-                                          maxlength="1000"
-                                          placeholder="Indicaciones generales para esta semana (opcional)"></textarea>
-                                <span asp-validation-for="Escala.Observaciones"></span>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="ec-card">
-                    <div class="ec-card-head">
-                        <div class="ec-step">Paso 2</div>
                         <h2 class="ec-card-title">Semana de aplicación</h2>
                     </div>
                     <div class="ec-card-body">
@@ -155,8 +103,8 @@
 
                 <section class="ec-card">
                     <div class="ec-card-head">
-                        <div class="ec-step">Paso 3</div>
-                        <h2 class="ec-card-title">Crear horarios de trabajo</h2>
+                        <div class="ec-step">Paso 2</div>
+                        <h2 class="ec-card-title">Horarios de la semana</h2>
                     </div>
                     <div class="ec-card-body">
                         <div class="ec-new-schedule">

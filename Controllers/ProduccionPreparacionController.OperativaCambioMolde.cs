@@ -30,7 +30,7 @@ namespace ERP.NSQuell.Controllers
             if (!permisos.PuedeVerModulo)
                 return StatusCode(StatusCodes.Status403Forbidden);
 
-            var sincronizacion = await SincronizarCambioMoldeOperativaAsync(usuarioId, cn);
+            var sincronizacion = await SincronizarCambioMoldeOperativaAsync(programaProduccionId, usuarioId, cn);
             if (!sincronizacion.Ok)
                 return StatusCode(StatusCodes.Status500InternalServerError, new { ok = false, mensaje = sincronizacion.Mensaje });
 
@@ -78,7 +78,7 @@ namespace ERP.NSQuell.Controllers
             if (!permisos.PuedeVerModulo)
                 return StatusCode(StatusCodes.Status403Forbidden);
 
-            var sincronizacion = await SincronizarCambioMoldeOperativaAsync(usuarioId, cn);
+            var sincronizacion = await SincronizarCambioMoldeOperativaAsync(programaProduccionId, usuarioId, cn);
             if (!sincronizacion.Ok)
                 return StatusCode(StatusCodes.Status500InternalServerError, new { ok = false, mensaje = sincronizacion.Mensaje });
 
@@ -164,6 +164,7 @@ namespace ERP.NSQuell.Controllers
         }
 
         private async Task<(bool Ok, string? Mensaje)> SincronizarCambioMoldeOperativaAsync(
+            int programaProduccionId,
             int usuarioId,
             SqlConnection cn)
         {
@@ -171,6 +172,17 @@ namespace ERP.NSQuell.Controllers
             try
             {
                 await SincronizarPreparacionAnticipadaAsync(usuarioId, cn, tx);
+
+                // NSQ_FLUJO_OBLIGATORIO_MOLDE_SECADO_OPERATIVA_V1_0
+                // La sincronizacion global conserva proyeccion para OF futuras.
+                // La OF que Produccion esta atendiendo se vuelve a validar contra
+                // el molde FISICO para que nunca desaparezca una obligacion real.
+                await AsegurarCambioMoldeFisicoOperativoAsync(
+                    programaProduccionId,
+                    usuarioId,
+                    cn,
+                    tx);
+
                 await tx.CommitAsync();
                 return (true, null);
             }
@@ -179,6 +191,73 @@ namespace ERP.NSQuell.Controllers
                 try { await tx.RollbackAsync(); } catch { }
                 return (false, "No fue posible sincronizar la preparación de Producción: " + ex.Message);
             }
+        }
+
+        private async Task AsegurarCambioMoldeFisicoOperativoAsync(
+            int programaProduccionId,
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            var evaluacion =
+                await ERP.NSQuell.Servicios.Produccion.CambioMoldeService.EvaluarProgramaAsync(
+                    programaProduccionId,
+                    cn,
+                    tx,
+                    actualizarSnapshot: true,
+                    modo: ERP.NSQuell.Servicios.Produccion.CambioMoldeModoEvaluacion.FisicoActual);
+
+            if (!evaluacion.TieneDatosValidos)
+                throw new InvalidOperationException(evaluacion.Motivo);
+
+            if (!evaluacion.RequiereCambioMolde)
+                return;
+
+            const string sql = @"
+SELECT
+    pp.FechaInicioProgramada,
+    pp.Cambio
+FROM dbo.Planeacion_ProgramaProduccion pp
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1;";
+
+            DateTime? fechaInicio = null;
+            TimeSpan? cambio = null;
+
+            await using (var cmd = new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (!await rd.ReadAsync())
+                    throw new InvalidOperationException("No se encontro el programa activo al sincronizar el cambio de molde operativo.");
+
+                fechaInicio =
+                    rd["FechaInicioProgramada"] == DBNull.Value
+                        ? null
+                        : Convert.ToDateTime(rd["FechaInicioProgramada"]);
+
+                cambio =
+                    rd["Cambio"] == DBNull.Value
+                        ? null
+                        : (TimeSpan?)rd["Cambio"];
+            }
+
+            if (!fechaInicio.HasValue)
+                throw new InvalidOperationException("La OF no tiene FechaInicioProgramada para generar la tarea de cambio de molde.");
+
+            var fechaObjetivo = ConstruirFechaPreparacion(fechaInicio.Value, cambio);
+            var fechaAviso = fechaObjetivo.AddMinutes(-PreparacionMinutosAvisoCambioMolde);
+
+            await SincronizarTareaPreparacionAsync(
+                programaProduccionId,
+                ProduccionPreparacionTipo.CambioMolde,
+                fechaObjetivo,
+                fechaAviso,
+                usuarioId,
+                cn,
+                tx);
         }
 
         private async Task<ProduccionPreparacionTareaVm?> ResolverTareaCambioMoldeOperativaAsync(

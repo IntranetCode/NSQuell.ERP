@@ -1,0 +1,146 @@
+﻿@using EscalaVM = ERP.NSQuell.Models.EscalaPersonal
+@model EscalaVM.EditorVM
+
+@* NSQ_RRHH_ESCALA_OPERADORES_RAPIDA_V1_1 *@
+<section class="rhq-shell"
+         data-rhq-planner
+         data-escala-id="@Model.Escala.EscalaID"
+         data-readonly="@((!Model.PuedeEditar).ToString().ToLowerInvariant())">
+
+    <form class="d-none" data-rhq-token>
+        @Html.AntiForgeryToken()
+    </form>
+
+    <div class="rhq-head">
+        <div>
+            <div class="rhq-eyebrow">RRHH · OPERADORES</div>
+            <h2>Programación rápida de horarios</h2>
+            <p>
+                Aquí no necesitas dar de alta persona por persona.
+                Los operadores vienen de la matriz de Polivalencia y RRHH solo define
+                <strong>horario semanal</strong> y, si lo desea,
+                <strong>máquina preferente</strong>.
+            </p>
+        </div>
+
+        <div class="rhq-head-actions">
+            @if (Model.PuedeEditar)
+            {
+                <button type="button"
+                        class="rhq-btn rhq-btn-light"
+                        data-open-assignment
+                        title="Usa el formulario individual solo para una excepción de fechas.">
+                    Ajuste individual
+                </button>
+            }
+            <button type="button"
+                    class="rhq-btn rhq-btn-primary"
+                    data-rhq-save
+                    @(Model.PuedeEditar ? null : "disabled")>
+                Guardar cambios
+            </button>
+        </div>
+    </div>
+
+    <div class="rhq-toolbar">
+        <div class="rhq-search">
+            <span>Buscar</span>
+            <input type="search"
+                   data-rhq-search
+                   placeholder="Nombre o número de control..."
+                   autocomplete="off" />
+        </div>
+
+        <label class="rhq-select-all">
+            <input type="checkbox" data-rhq-select-visible />
+            <span>Seleccionar visibles</span>
+        </label>
+
+        <div class="rhq-bulk">
+            <select data-rhq-bulk-turn>
+                <option value="">Horario para seleccionados...</option>
+            </select>
+            <button type="button"
+                    class="rhq-btn rhq-btn-light"
+                    data-rhq-apply-turn
+                    @(Model.PuedeEditar ? null : "disabled")>
+                Aplicar horario
+            </button>
+        </div>
+
+        <div class="rhq-bulk">
+            <select data-rhq-bulk-machine>
+                <option value="">Máquina preferente...</option>
+            </select>
+            <button type="button"
+                    class="rhq-btn rhq-btn-light"
+                    data-rhq-apply-machine
+                    @(Model.PuedeEditar ? null : "disabled")>
+                Aplicar máquina
+            </button>
+        </div>
+
+        <button type="button"
+                class="rhq-btn rhq-btn-soft"
+                data-rhq-copy-previous
+                @(Model.PuedeEditar ? null : "disabled")>
+            Usar semana anterior
+        </button>
+    </div>
+
+    <div class="rhq-kpis">
+        <div><span>Total operadores</span><strong data-rhq-total>—</strong></div>
+        <div><span>Con horario</span><strong data-rhq-assigned>—</strong></div>
+        <div><span>Sin horario</span><strong data-rhq-unassigned>—</strong></div>
+        <div><span>Cambios pendientes</span><strong data-rhq-dirty>0</strong></div>
+    </div>
+
+    <div class="rhq-note">
+        <strong>Cómo lo usa Producción:</strong>
+        ProduccionPersonal toma esta semana y horario para priorizar quién está disponible
+        en la hora de cada OF. La máquina es una preferencia; Producción/Planeación puede
+        cambiar la persona si hay una ausencia real.
+    </div>
+
+    <div class="rhq-table-wrap">
+        <table class="rhq-table">
+            <thead>
+                <tr>
+                    <th class="rhq-check"></th>
+                    <th>No. control</th>
+                    <th>Operador</th>
+                    <th>Horario de la semana</th>
+                    <th>Máquina preferente <small>opcional</small></th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody data-rhq-body>
+                <tr>
+                    <td colspan="6" class="rhq-loading">
+                        Cargando operadores de Polivalencia...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="rhq-footer">
+        <div data-rhq-message class="rhq-message">
+            Sin cambios pendientes.
+        </div>
+        <div class="rhq-footer-actions">
+            <button type="button"
+                    class="rhq-btn rhq-btn-light"
+                    data-rhq-reset
+                    @(Model.PuedeEditar ? null : "disabled")>
+                Deshacer cambios
+            </button>
+            <button type="button"
+                    class="rhq-btn rhq-btn-primary"
+                    data-rhq-save-bottom
+                    @(Model.PuedeEditar ? null : "disabled")>
+                Guardar programación semanal
+            </button>
+        </div>
+    </div>
+</section>

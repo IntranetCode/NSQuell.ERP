@@ -38,7 +38,7 @@ namespace ERP.NSQuell.Controllers
         {
             var modelo = new EscalaVM.IndexVM
             {
-                PuedeAdministrar = true
+                PuedeAdministrar = await PuedeGestionarOperadoresRRHHV1Async()
             };
 
             const string sql = @"
@@ -391,8 +391,8 @@ VALUES
                 Turnos = turnos,
                 Grupos = ConstruirGrupos(asignaciones, turnos),
                 Novedades = await ObtenerNovedadesAsync(id),
-                Personas = await ObtenerPersonasAsync(),
-                Funciones = await ObtenerFuncionesAsync(true),
+                Personas = await ObtenerPersonasOperadoresRRHHV1Async(),
+                Funciones = await ObtenerFuncionesOperadorRRHHV1Async(),
                 Maquinas = await ObtenerMaquinasAsync(),
                 PuedeEditar = escala.Estado == EscalaVM.Estados.Borrador,
                 PuedePublicar =
@@ -400,7 +400,7 @@ VALUES
                     && asignaciones.Count > 0
             };
 
-            return View(modelo);
+            return View("EditorRRHHV20", modelo);
         }
 
         [HttpPost]
@@ -458,6 +458,24 @@ VALUES
                         nameof(Editor),
                         new { id = modelo.EscalaID });
                 }
+
+                // NSQ_RRHH_ESCALA_OPERADORES_INTEGRACION_V1_0
+                // RH administra OPERADORES en este flujo; la funcion ya no depende
+                // de una seleccion manual que pueda generar inconsistencias.
+                var funcionOperadorID =
+                    await ObtenerFuncionOperadorIdRRHHV1Async(connection, transaction);
+
+                if (!funcionOperadorID.HasValue)
+                {
+                    TempData["Error"] =
+                        "No existe una función activa llamada OPERADOR. Ejecuta el SQL de configuración RRHH V1_0.";
+                    await transaction.RollbackAsync();
+                    return RedirectToAction(
+                        nameof(Editor),
+                        new { id = modelo.EscalaID });
+                }
+
+                modelo.FuncionID = funcionOperadorID.Value;
 
                 var errorCatalogos = await ValidarCatalogosAsignacionAsync(
                     modelo,
@@ -657,7 +675,7 @@ WHERE a.AsignacionID = @AsignacionID
             {
                 Escala = escala,
                 Novedades = await ObtenerNovedadesAsync(id),
-                Personas = await ObtenerPersonasAsync(),
+                Personas = await ObtenerPersonasOperadoresRRHHV1Async(),
                 PuedeEditar = escala.Estado == EscalaVM.Estados.Borrador
             };
 

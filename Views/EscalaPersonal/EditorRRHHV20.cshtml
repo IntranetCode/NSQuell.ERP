@@ -1,0 +1,546 @@
+@* NSQ_RRHH_EDITOR_COMPACTO_PDF_MODAL_V2_5 *@
+
+@using System
+@using System.Linq
+@using EscalaVM = ERP.NSQuell.Models.EscalaPersonal
+@model EscalaVM.EditorVM
+
+@{
+    ViewData["Title"] = $"Programación RH · {Model.Escala.Folio}";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var asignaciones = Model.Grupos
+        .SelectMany(g => g.Celdas.SelectMany(c =>
+            c.Asignaciones.Select(a => new
+            {
+                Asignacion = a,
+                Grupo = g,
+                Celda = c
+            })))
+        .ToList();
+
+    var asignadas = asignaciones
+        .Select(x => x.Asignacion.PersonalID)
+        .Distinct()
+        .ToHashSet();
+
+    var funcionOperador = Model.Funciones
+        .FirstOrDefault(x =>
+            string.Equals(
+                x.Nombre?.Trim(),
+                "OPERADOR",
+                StringComparison.OrdinalIgnoreCase));
+}
+
+@section Styles {
+    <link rel="stylesheet"
+          href="~/css/EscalaPersonal/escala-navegacion.css"
+          asp-append-version="true" />
+    <link rel="stylesheet"
+          href="~/css/EscalaPersonal/editor-rrhh-v20.css"
+          asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/EscalaPersonal/editor-rrhh-v20.js"
+            asp-append-version="true"></script>
+}
+
+<div class="rrhh20"
+     data-escala-id="@Model.Escala.EscalaID"
+     data-editable="@Model.PuedeEditar.ToString().ToLowerInvariant()">
+
+    <partial name="_EscalaNavegacion" />
+
+    <section class="rrhh20-hero">
+        <div>
+            <span class="rrhh20-eyebrow">Recursos Humanos · Programación semanal</span>
+            <h1>Escala de personal · Semana @Model.Escala.NumeroSemana</h1>
+            <p>
+                Selecciona un horario y marca a todas las personas que pertenecen a ese turno.
+                No es necesario capturar persona por persona.
+            </p>
+        </div>
+
+        <div class="rrhh20-hero-actions">
+            <a asp-action="Index" class="rrhh20-btn rrhh20-btn-light">Volver</a>
+
+            <a asp-action="Operadores"
+               class="rrhh20-btn rrhh20-btn-light">
+                Directorio de operadores
+            </a>
+
+            <button type="button"
+                    class="rrhh20-btn rrhh20-btn-dark"
+                    id="rrhh20OpenPdf"
+                    data-preview-url="@Url.Action("VistaPdfV21", "EscalaPersonal", new { id = Model.Escala.EscalaID })"
+                    data-download-url="@Url.Action("DescargarPdfV20", "EscalaPersonal", new { id = Model.Escala.EscalaID })">
+                Vista previa PDF
+            </button>
+        </div>
+    </section>
+
+    @if (TempData["Exito"] != null)
+    {
+        <div class="rrhh20-alert success">@TempData["Exito"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="rrhh20-alert error">@TempData["Error"]</div>
+    }
+
+    <section class="rrhh20-summary">
+        <article>
+            <span>Folio</span>
+            <strong>@Model.Escala.Folio</strong>
+        </article>
+        <article>
+            <span>Periodo</span>
+            <strong>
+                @Model.Escala.FechaInicio.ToString("dd/MM/yyyy")
+                -
+                @Model.Escala.FechaFin.ToString("dd/MM/yyyy")
+            </strong>
+        </article>
+        <article>
+            <span>Estado</span>
+            <strong>@Model.Escala.Estado</strong>
+        </article>
+        <article>
+            <span>Personal con horario</span>
+            <strong>@asignadas.Count</strong>
+        </article>
+    </section>
+
+    @if (!Model.PuedeEditar)
+    {
+        <div class="rrhh20-alert info">
+            Esta escala está publicada o cerrada. Para modificar horarios primero
+            debes regresarla a Borrador.
+        </div>
+    }
+
+    <section class="rrhh20-workspace">
+        <div class="rrhh20-panel">
+            <div class="rrhh20-panel-head">
+                <div>
+                    <span class="rrhh20-step">1</span>
+                    <div>
+                        <h2>Define el horario</h2>
+                        <p>Elige tipo de personal, turno y, si aplica, máquina preferente.</p>
+                    </div>
+                </div>
+
+                @if (Model.PuedeEditar)
+                {
+                    <button type="button"
+                            class="rrhh20-btn rrhh20-btn-light"
+                            id="rrhh20CopyPrevious">
+                        Copiar semana anterior
+                    </button>
+                }
+            </div>
+
+            <div class="rrhh20-controls">
+                <label>
+                    <span>Tipo de personal</span>
+                    <select id="rrhh20Function" @(Model.PuedeEditar ? null : "disabled")>
+                        <option value="">Selecciona una función</option>
+                        @foreach (var funcion in Model.Funciones
+                            .Where(x => x.Activo)
+                            .OrderBy(x => x.Orden)
+                            .ThenBy(x => x.Nombre))
+                        {
+                            <option value="@funcion.FuncionID"
+                                    data-name="@funcion.Nombre"
+                                    data-machine="@funcion.RequiereMaquina.ToString().ToLowerInvariant()"
+                                    selected="@(funcionOperador?.FuncionID == funcion.FuncionID)">
+                                @funcion.Nombre
+                            </option>
+                        }
+                    </select>
+                </label>
+
+                <label>
+                    <span>Horario</span>
+                    <select id="rrhh20Turn"
+                            @(Model.PuedeEditar ? null : "disabled")>
+                        <option value="">Selecciona un horario</option>
+                        @foreach (var turno in Model.Turnos.OrderBy(x => x.Orden))
+                        {
+                            <option value="@turno.EscalaTurnoID">
+                                @turno.Nombre · @turno.HorarioTexto
+                            </option>
+                        }
+                        <option value="0">Sin horario / quitar asignación</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>Máquina preferente</span>
+                    <select id="rrhh20Machine"
+                            @(Model.PuedeEditar ? null : "disabled")>
+                        <option value="">Sin preferencia de máquina</option>
+                        @foreach (var maquina in Model.Maquinas
+                            .Where(x => x.Activo)
+                            .OrderBy(x => x.Codigo)
+                            .ThenBy(x => x.Nombre))
+                        {
+                            <option value="@maquina.MaquinaID">@maquina.Texto</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            <div class="rrhh20-note">
+                <strong>Operadores:</strong>
+                la función <b>OPERADOR</b> es la que se conecta con
+                Programación de Personal de Producción/Planeación.
+                Máquina es preferencia; Liz puede cambiar la asignación final por OF.
+            </div>
+        </div>
+
+        <div class="rrhh20-panel rrhh20-people-panel">
+            <div class="rrhh20-panel-head">
+                <div>
+                    <span class="rrhh20-step">2</span>
+                    <div>
+                        <h2>Marca al personal</h2>
+                        <p>Selecciona varias personas y aplica el horario en un solo movimiento.</p>
+                    </div>
+                </div>
+
+                <div class="rrhh20-counter">
+                    <strong id="rrhh20SelectedCount">0</strong>
+                    <span>seleccionados</span>
+                </div>
+            </div>
+
+            <div class="rrhh20-search-row">
+                <input type="search"
+                       id="rrhh20Search"
+                       placeholder="Buscar por nombre, número de control o puesto..." />
+
+                <button type="button"
+                        id="rrhh20SelectVisible"
+                        class="rrhh20-btn rrhh20-btn-light">
+                    Marcar visibles
+                </button>
+
+                <button type="button"
+                        id="rrhh20Clear"
+                        class="rrhh20-btn rrhh20-btn-light">
+                    Limpiar
+                </button>
+            </div>
+
+            <form id="rrhh20BulkForm"
+                  asp-action="GuardarAsignacionesMasivasV20"
+                  method="post">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden"
+                       name="EscalaID"
+                       value="@Model.Escala.EscalaID" />
+                <input type="hidden"
+                       name="FuncionID"
+                       id="rrhh20FunctionHidden" />
+                <input type="hidden"
+                       name="EscalaTurnoID"
+                       id="rrhh20TurnHidden" />
+                <input type="hidden"
+                       name="MaquinaID"
+                       id="rrhh20MachineHidden" />
+
+                <div class="rrhh20-people-grid" id="rrhh20PeopleGrid">
+                    @foreach (var persona in Model.Personas
+                        .Where(x => x.Activo)
+                        .OrderBy(x => x.NombreCompleto))
+                    {
+                        var actual = asignaciones
+                            .FirstOrDefault(x =>
+                                x.Asignacion.PersonalID == persona.PersonalID);
+
+                        var actualTexto = actual == null
+                            ? "Sin horario asignado"
+                            : $"{actual.Grupo.NombreFuncion} · {actual.Celda.NombreTurno}" +
+                              (string.IsNullOrWhiteSpace(actual.Grupo.NombreMaquina)
+                                  ? ""
+                                  : $" · {actual.Grupo.NombreMaquina}");
+
+                        <label class="rrhh20-person"
+                               data-person
+                               data-search="@($"{persona.NumeroEmpleado} {persona.NombreCompleto} {persona.Puesto}".ToLowerInvariant())"
+                               data-puesto="@persona.Puesto">
+                            <input class="rrhh20-person-check"
+                                   type="checkbox"
+                                   name="PersonalIDs"
+                                   value="@persona.PersonalID"
+                                   @(Model.PuedeEditar ? null : "disabled") />
+
+                            <span class="rrhh20-person-main">
+                                <strong title="@persona.NombreCompleto">@persona.NombreCompleto</strong>
+                                <small>
+                                    @(string.IsNullOrWhiteSpace(persona.NumeroEmpleado)
+                                        ? $"ID {persona.PersonalID}"
+                                        : persona.NumeroEmpleado)
+                                    @if (!string.IsNullOrWhiteSpace(persona.Puesto))
+                                    {
+                                        <text> · @persona.Puesto</text>
+                                    }
+                                </small>
+                                <span class="rrhh20-current @(actual == null ? "" : "assigned")"
+                                      title="@actualTexto">
+                                    @actualTexto
+                                </span>
+                            </span>
+                        </label>
+                    }
+                </div>
+
+                @if (Model.PuedeEditar)
+                {
+                    <div class="rrhh20-sticky-action">
+                        <div>
+                            <strong id="rrhh20ActionTitle">
+                                Selecciona función, horario y personas
+                            </strong>
+                            <span id="rrhh20ActionHelp">
+                                Puedes cambiar de turno a varias personas al mismo tiempo.
+                            </span>
+                        </div>
+
+                        <button type="submit"
+                                class="rrhh20-btn rrhh20-btn-primary"
+                                id="rrhh20Apply">
+                            Aplicar horario
+                        </button>
+                    </div>
+                }
+            </form>
+        </div>
+    </section>
+
+    <section class="rrhh20-panel">
+        <div class="rrhh20-panel-head">
+            <div>
+                <span class="rrhh20-step">3</span>
+                <div>
+                    <h2>Vista de la escala</h2>
+                    <p>
+                        Esta matriz es la que alimenta el PDF semanal.
+                        Operadores también alimentan ProducciónPersonal.
+                    </p>
+                </div>
+            </div>
+
+            <a asp-action="Novedades"
+               asp-route-id="@Model.Escala.EscalaID"
+               class="rrhh20-btn rrhh20-btn-light">
+                Novedades (@Model.Novedades.Count)
+            </a>
+        </div>
+
+        <div class="rrhh20-matrix-wrap">
+            <table class="rrhh20-matrix">
+                <thead>
+                    <tr>
+                        <th>Función / Máquina</th>
+                        @foreach (var turno in Model.Turnos.OrderBy(x => x.Orden))
+                        {
+                            <th>
+                                <strong>@turno.Nombre</strong>
+                                <span>@turno.HorarioTexto</span>
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Grupos.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="@(Model.Turnos.Count + 1)"
+                                class="rrhh20-empty">
+                                Todavía no hay personal programado para esta semana.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var grupo in Model.Grupos
+                            .OrderBy(x => x.OrdenDepartamento)
+                            .ThenBy(x => x.OrdenFuncion)
+                            .ThenBy(x => x.NombreMaquina))
+                        {
+                            <tr>
+                                <td class="rrhh20-row-title">
+                                    <strong>@grupo.NombreFuncion</strong>
+                                    @if (!string.IsNullOrWhiteSpace(grupo.NombreMaquina))
+                                    {
+                                        <span>@grupo.NombreMaquina</span>
+                                    }
+                                </td>
+
+                                @foreach (var turno in Model.Turnos.OrderBy(x => x.Orden))
+                                {
+                                    var celda = grupo.Celdas
+                                        .FirstOrDefault(x =>
+                                            x.EscalaTurnoID == turno.EscalaTurnoID);
+
+                                    <td>
+                                        @if (celda?.Asignaciones?.Count > 0)
+                                        {
+                                            <div class="rrhh20-cell-people">
+                                                @foreach (var item in celda.Asignaciones
+                                                    .OrderBy(x => x.NombrePersona))
+                                                {
+                                                    <span>
+                                                        @if (!string.IsNullOrWhiteSpace(item.NumeroEmpleado))
+                                                        {
+                                                            <b>@item.NumeroEmpleado</b>
+                                                        }
+                                                        @item.NombrePersona
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="rrhh20-panel">
+        <div class="rrhh20-panel-head">
+            <div>
+                <h2>Novedades de la semana</h2>
+                <p>Bajas, ingresos, incapacidades, vacaciones y otros movimientos de RH.</p>
+            </div>
+
+            <a asp-action="Novedades"
+               asp-route-id="@Model.Escala.EscalaID"
+               class="rrhh20-btn rrhh20-btn-light">
+                Administrar novedades
+            </a>
+        </div>
+
+        @if (Model.Novedades.Count == 0)
+        {
+            <div class="rrhh20-empty">No hay novedades registradas.</div>
+        }
+        else
+        {
+            <div class="rrhh20-news">
+                @foreach (var novedad in Model.Novedades
+                    .OrderBy(x => x.TipoNovedad)
+                    .ThenBy(x => x.FechaInicio))
+                {
+                    <article>
+                        <strong>@novedad.TipoNovedad</strong>
+                        <span>@novedad.NombrePersona</span>
+                        <small>
+                            @novedad.FechaInicio.ToString("dd/MM/yyyy")
+                            @if (novedad.FechaFin.HasValue)
+                            {
+                                <text> - @novedad.FechaFin.Value.ToString("dd/MM/yyyy")</text>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(novedad.Motivo))
+                            {
+                                <text> · @novedad.Motivo</text>
+                            }
+                        </small>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="rrhh20-footer-actions">
+        @if (Model.PuedePublicar)
+        {
+            <form asp-action="Publicar" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden"
+                       name="escalaID"
+                       value="@Model.Escala.EscalaID" />
+                <button type="submit"
+                        class="rrhh20-btn rrhh20-btn-primary">
+                    Publicar escala
+                </button>
+            </form>
+        }
+
+        @if (Model.Escala.Estado == EscalaVM.Estados.Publicada)
+        {
+            <form asp-action="RegresarABorrador" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden"
+                       name="escalaID"
+                       value="@Model.Escala.EscalaID" />
+                <button type="submit"
+                        class="rrhh20-btn rrhh20-btn-light">
+                    Regresar a borrador
+                </button>
+            </form>
+        }
+
+        @if (Model.Escala.Estado == EscalaVM.Estados.Borrador)
+        {
+            <form asp-action="Cancelar" method="post"
+                  onsubmit="return confirm('¿Cancelar esta escala?');">
+                @Html.AntiForgeryToken()
+                <input type="hidden"
+                       name="escalaID"
+                       value="@Model.Escala.EscalaID" />
+                <button type="submit"
+                        class="rrhh20-btn rrhh20-btn-danger">
+                    Cancelar escala
+                </button>
+            </form>
+        }
+    </section>
+
+
+    <div class="rrhh20-pdf-modal"
+         id="rrhh20PdfModal"
+         aria-hidden="true"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="rrhh20PdfTitle">
+        <div class="rrhh20-pdf-dialog">
+            <div class="rrhh20-pdf-head">
+                <div>
+                    <span>Documento semanal</span>
+                    <strong id="rrhh20PdfTitle">Escala de personal · Semana @Model.Escala.NumeroSemana</strong>
+                </div>
+
+                <div class="rrhh20-pdf-actions">
+                    <a id="rrhh20PdfDownload"
+                       class="rrhh20-btn rrhh20-btn-primary"
+                       href="#">
+                        Descargar PDF
+                    </a>
+                    <button type="button"
+                            class="rrhh20-pdf-close"
+                            id="rrhh20PdfClose"
+                            aria-label="Cerrar vista previa">
+                        ×
+                    </button>
+                </div>
+            </div>
+
+            <div class="rrhh20-pdf-body">
+                <div class="rrhh20-pdf-loading" id="rrhh20PdfLoading">
+                    Preparando vista previa...
+                </div>
+                <iframe id="rrhh20PdfFrame"
+                        title="Vista previa de la escala semanal"></iframe>
+            </div>
+        </div>
+    </div>
+</div>

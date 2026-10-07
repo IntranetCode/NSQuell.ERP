@@ -386,6 +386,15 @@ public sealed partial class ProduccionOperativaController : Controller
         if (vm.Pasos.Any(x => x.Aplica && string.Equals(x.Clave, AgendaOperativaPasoClave.CambioMolde, StringComparison.OrdinalIgnoreCase)))
         {
             var preparacionId = await ObtenerPreparacionCambioMoldeIdAsync(vm.ProgramaProduccionID, cn, cancellationToken);
+
+            if (!preparacionId.HasValue)
+            {
+                preparacionId = await AsegurarPreparacionCambioMoldeFisicaOperativaAsync(
+                    vm.ProgramaProduccionID,
+                    cn,
+                    cancellationToken);
+            }
+
             if (preparacionId.HasValue)
             {
                 var estadoChecklistMolde = await ObtenerEstadoChecklistCambioMoldeOperativoAsync(preparacionId.Value, cn, cancellationToken);
@@ -1660,6 +1669,196 @@ ORDER BY ParteDatoTecnicoID DESC;";
         vm.CantidadProducida = Math.Max(vm.CantidadProducida, vm.Metricas.CantidadProducida);
     }
 
+    // NSQ_FLUJO_OBLIGATORIO_MOLDE_SECADO_OPERATIVA_V1_0
+    private async Task<int?> AsegurarPreparacionCambioMoldeFisicaOperativaAsync(
+        int programaProduccionId,
+        SqlConnection cn,
+        CancellationToken cancellationToken)
+    {
+        if (programaProduccionId <= 0) return null;
+
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        try
+        {
+            var evaluacion = await CambioMoldeService.EvaluarProgramaAsync(
+                programaProduccionId,
+                cn,
+                tx,
+                actualizarSnapshot: true,
+                modo: CambioMoldeModoEvaluacion.FisicoActual);
+
+            if (!evaluacion.TieneDatosValidos)
+                throw new InvalidOperationException(evaluacion.Motivo);
+
+            if (!evaluacion.RequiereCambioMolde)
+            {
+                await tx.CommitAsync(cancellationToken);
+                return null;
+            }
+
+            DateTime? fechaInicioProgramada = null;
+            TimeSpan? cambio = null;
+            var minutosAviso = 30;
+
+            const string sqlContexto = @"
+SELECT
+    pp.FechaInicioProgramada,
+    pp.Cambio,
+    ISNULL(m.MinutosMaxCambioMolde,60) AS MinutosMaxCambioMolde
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.ERP_Maquinas m
+    ON m.MaquinaID=pp.MaquinaID
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1;";
+
+            await using (var cmdContexto = new SqlCommand(sqlContexto, cn, tx))
+            {
+                cmdContexto.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+
+                await using var rd = await cmdContexto.ExecuteReaderAsync(cancellationToken);
+
+                if (!await rd.ReadAsync(cancellationToken))
+                    throw new InvalidOperationException("No se encontro el programa activo para generar la tarea de cambio de molde.");
+
+                fechaInicioProgramada =
+                    rd["FechaInicioProgramada"] == DBNull.Value
+                        ? null
+                        : Convert.ToDateTime(rd["FechaInicioProgramada"]);
+
+                cambio =
+                    rd["Cambio"] == DBNull.Value
+                        ? null
+                        : (TimeSpan?)rd["Cambio"];
+
+                minutosAviso =
+                    rd["MinutosMaxCambioMolde"] == DBNull.Value
+                        ? 60
+                        : Math.Max(1, Convert.ToInt32(rd["MinutosMaxCambioMolde"]));
+            }
+
+            if (!fechaInicioProgramada.HasValue)
+                throw new InvalidOperationException("La OF no tiene FechaInicioProgramada para generar el cambio de molde.");
+
+            var fechaObjetivo = fechaInicioProgramada.Value;
+
+            if (cambio.HasValue)
+            {
+                fechaObjetivo = fechaInicioProgramada.Value.Date.Add(cambio.Value);
+
+                if (fechaObjetivo < fechaInicioProgramada.Value)
+                    fechaObjetivo = fechaObjetivo.AddDays(1);
+            }
+
+            var fechaAviso = fechaObjetivo.AddMinutes(-minutosAviso);
+            var usuarioId = ObtenerUsuarioID();
+
+            const string sqlUpsert = @"
+DECLARE @PreparacionAnticipadaID INT;
+DECLARE @EstadoActual NVARCHAR(30);
+
+SELECT TOP(1)
+    @PreparacionAnticipadaID=PreparacionAnticipadaID,
+    @EstadoActual=UPPER(LTRIM(RTRIM(ISNULL(Estado,N'PENDIENTE'))))
+FROM dbo.Produccion_PreparacionAnticipada WITH(UPDLOCK,HOLDLOCK)
+WHERE ProgramaProduccionID=@ProgramaProduccionID
+  AND UPPER(LTRIM(RTRIM(ISNULL(TipoTarea,N''))))=N'CAMBIO_MOLDE'
+ORDER BY PreparacionAnticipadaID DESC;
+
+IF @PreparacionAnticipadaID IS NULL
+BEGIN
+    INSERT INTO dbo.Produccion_PreparacionAnticipada
+    (
+        ProgramaProduccionID,TipoTarea,FechaObjetivo,FechaAviso,Estado,
+        UsuarioConfirmacionID,FechaConfirmacion,Observaciones,Activo,
+        UsuarioCreacionID,FechaCreacion,UsuarioInicioID,FechaInicioReal,
+        FechaFinReal,DuracionRealMinutos,LimiteMinutosAplicado,
+        ExcedioLimite,MotivoExceso
+    )
+    VALUES
+    (
+        @ProgramaProduccionID,N'CAMBIO_MOLDE',@FechaObjetivo,@FechaAviso,N'PENDIENTE',
+        NULL,NULL,N'NSQ_FUENTE_FISICA_OPERATIVA',1,
+        @UsuarioID,SYSDATETIME(),NULL,NULL,
+        NULL,NULL,NULL,0,NULL
+    );
+
+    SET @PreparacionAnticipadaID=SCOPE_IDENTITY();
+END
+ELSE IF @EstadoActual=N'EN_PROCESO'
+BEGIN
+    UPDATE dbo.Produccion_PreparacionAnticipada
+    SET FechaObjetivo=@FechaObjetivo,
+        FechaAviso=@FechaAviso,
+        Activo=1,
+        UsuarioModificacionID=@UsuarioID,
+        FechaModificacion=SYSDATETIME()
+    WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
+END
+ELSE IF @EstadoActual=N'CONFIRMADA'
+BEGIN
+    UPDATE dbo.Produccion_PreparacionAnticipada
+    SET Activo=1,
+        UsuarioModificacionID=@UsuarioID,
+        FechaModificacion=SYSDATETIME()
+    WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
+END
+ELSE
+BEGIN
+    UPDATE dbo.Produccion_PreparacionAnticipada
+    SET FechaObjetivo=@FechaObjetivo,
+        FechaAviso=@FechaAviso,
+        Estado=N'PENDIENTE',
+        UsuarioInicioID=NULL,
+        FechaInicioReal=NULL,
+        FechaFinReal=NULL,
+        DuracionRealMinutos=NULL,
+        LimiteMinutosAplicado=NULL,
+        ExcedioLimite=0,
+        MotivoExceso=NULL,
+        UsuarioConfirmacionID=NULL,
+        FechaConfirmacion=NULL,
+        Observaciones=CASE
+            WHEN ISNULL(Observaciones,N'') LIKE N'%NSQ_FUENTE_FISICA_OPERATIVA%'
+                THEN Observaciones
+            WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL
+                THEN N'NSQ_FUENTE_FISICA_OPERATIVA'
+            ELSE LEFT(Observaciones+N' | NSQ_FUENTE_FISICA_OPERATIVA',500)
+        END,
+        Activo=1,
+        UsuarioModificacionID=@UsuarioID,
+        FechaModificacion=SYSDATETIME()
+    WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
+END;
+
+SELECT @PreparacionAnticipadaID;";
+
+            int? preparacionId;
+
+            await using (var cmdUpsert = new SqlCommand(sqlUpsert, cn, tx))
+            {
+                cmdUpsert.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                cmdUpsert.Parameters.Add("@FechaObjetivo", SqlDbType.DateTime2).Value = fechaObjetivo;
+                cmdUpsert.Parameters.Add("@FechaAviso", SqlDbType.DateTime2).Value = fechaAviso;
+                cmdUpsert.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+
+                var valor = await cmdUpsert.ExecuteScalarAsync(cancellationToken);
+                preparacionId = valor == null || valor == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(valor);
+            }
+
+            await tx.CommitAsync(cancellationToken);
+            return preparacionId;
+        }
+        catch
+        {
+            try { await tx.RollbackAsync(cancellationToken); } catch { }
+            throw;
+        }
+    }
     private static async Task<int?> ObtenerPreparacionCambioMoldeIdAsync(
         int programaProduccionId,
         SqlConnection cn,
