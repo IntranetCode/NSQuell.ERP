@@ -530,19 +530,62 @@
         }
     }
 
+    // NSQ_PRODUCCION_PERSONAL_SELECTOR_RH_REAL_V16_0
     async function loadCandidates(row) {
-        const cacheKey = row.parteID ? `part:${row.parteID}` : 'all';
+        const q = queryForBoard(state.turnoId);
+        if (row.parteID) q.set('parteId', String(row.parteID));
 
-        if (state.candidatesCache.has(cacheKey))
-            return state.candidatesCache.get(cacheKey);
+        // Consultar RH cada vez que se abre el selector, con turno y periodo.
+        const data = await fetchJson(`${api.candidates}?${q.toString()}`, { cache: 'no-store' });
+        if (data.versionSelectorRH !== 'V16_0')
+            throw new Error('Reinicia el ERP y actualiza la página para cargar los horarios de Recursos Humanos.');
+        return data.operadores || [];
+    }
 
-        const data = await fetchJson(
-            `${api.candidates}?parteId=${encodeURIComponent(row.parteID || '')}`
-        );
+    function rhCandidateMatches(candidate, query) {
+        return !query || normalize([
+            candidate.nombre, candidate.numeroControl, candidate.horarioRH,
+            candidate.turnoRH, candidate.estadoHorarioRH,
+            candidate.nivel ? `N${candidate.nivel}` : ''
+        ].join(' ')).includes(query);
+    }
 
-        const candidates = data.operadores || [];
-        state.candidatesCache.set(cacheKey, candidates);
-        return candidates;
+    function rhCandidateIdentity(candidate) {
+        const control = candidate.numeroControl ? `#${escapeHtml(candidate.numeroControl)}` : 'Sin número de control';
+        const level = candidate.nivel ? ` · N${escapeHtml(candidate.nivel)}` : '';
+        const schedule = candidate.horarioRH || 'Sin horario RH';
+        const priority = Number(candidate.prioridadHorarioRH ?? 1);
+        const stateText = candidate.estadoHorarioRH || 'Sin horario RH';
+        const variants = candidate.horariosRH || [];
+        const partial = Number(candidate.diasConHorarioRH || 0) > 0 &&
+            Number(candidate.diasConHorarioRH) < Number(candidate.diasPeriodoRH);
+        const details = variants.length > 1 || partial
+            ? `<small class="ppv16-rh-details">${variants.map(item =>
+                `${escapeHtml(item.horario)} (${(item.fechas || []).map(date => escapeHtml(date.slice(5).split('-').reverse().join('/'))).join(', ')})`
+              ).join(' · ')}${partial ? ' · Sin horario RH los demás días' : ''}</small>`
+            : '';
+
+        return `<span class="ppv16-candidate-identity">
+            <span class="ppv16-candidate-name">
+                <strong>${escapeHtml(candidate.nombre)}</strong>
+                <span class="ppv16-rh-schedule ppv16-rh-priority-${priority}">${escapeHtml(schedule)}</span>
+            </span>
+            <small>${control}${level} · ${escapeHtml(stateText)}</small>
+            ${details}
+        </span>`;
+    }
+
+    function rhCandidateGroups(candidates, renderOption) {
+        let previous = null;
+        return candidates.map(candidate => {
+            const priority = Number(candidate.prioridadHorarioRH ?? 1);
+            const title = priority === 0 ? 'HORARIO SELECCIONADO'
+                : priority === 1 ? 'SIN HORARIO RH' : 'OTROS HORARIOS RH';
+            const header = previous !== priority
+                ? `<div class="ppv16-rh-group">${title}</div>` : '';
+            previous = priority;
+            return header + renderOption(candidate);
+        }).join('');
     }
 
     function closeActivePicker() {
@@ -640,27 +683,16 @@
         const renderResults = query => {
             const q = normalize(query);
 
-            const filtered = candidates
-                .filter(candidate =>
-                    !q ||
-                    normalize(candidate.nombre).includes(q) ||
-                    normalize(candidate.numeroControl).includes(q))
-                .slice(0, 50);
+            const filtered = candidates.filter(candidate => rhCandidateMatches(candidate, q));
 
             results.innerHTML = filtered.length
-                ? filtered.map(candidate => `
+                ? rhCandidateGroups(filtered, candidate => `
                     <button type="button"
                             class="ppv14-picker-result"
                             data-candidate-id="${candidate.personaID}">
-                        <span>
-                            <strong>${escapeHtml(candidate.nombre)}</strong>
-                            <small>
-                                ${candidate.numeroControl ? `#${escapeHtml(candidate.numeroControl)}` : 'Sin número de control'}
-                                ${candidate.nivel ? ` · Nivel ${candidate.nivel}` : ''}
-                            </small>
-                        </span>
+                        ${rhCandidateIdentity(candidate)}
                         <i class="fa-solid fa-chevron-right"></i>
-                    </button>`).join('')
+                    </button>`)
                 : `<div class="ppv14-picker-empty">No hay coincidencias.</div>`;
 
             results.querySelectorAll('[data-candidate-id]').forEach(option => {
@@ -1058,28 +1090,16 @@
         const renderCandidates = filter => {
             const q = normalize(filter);
 
-            const filtered = candidates
-                .filter(candidate =>
-                    !q ||
-                    normalize(candidate.nombre).includes(q) ||
-                    normalize(candidate.numeroControl).includes(q))
-                .slice(0, 60);
-
+            const filtered = candidates.filter(candidate => rhCandidateMatches(candidate, q));
             const host = document.getElementById('ppv14ChangeCandidates');
 
-            host.innerHTML = filtered.map(candidate => `
+            host.innerHTML = rhCandidateGroups(filtered, candidate => `
                 <button type="button"
                         class="ppv14-modal-candidate ${Number(candidate.personaID) === Number(state.change.selectedId) ? 'selected' : ''}"
                         data-change-candidate="${candidate.personaID}">
-                    <span>
-                        <strong>${escapeHtml(candidate.nombre)}</strong>
-                        <small>
-                            ${candidate.numeroControl ? `#${escapeHtml(candidate.numeroControl)}` : 'Sin número de control'}
-                            ${candidate.nivel ? ` · N${candidate.nivel}` : ''}
-                        </small>
-                    </span>
+                    ${rhCandidateIdentity(candidate)}
                     <i class="fa-solid ${Number(candidate.personaID) === Number(state.change.selectedId) ? 'fa-circle-check' : 'fa-chevron-right'}"></i>
-                </button>`).join('') || '<div class="ppv14-picker-empty">Sin coincidencias.</div>';
+                </button>`) || '<div class="ppv14-picker-empty">Sin coincidencias.</div>';
 
             host.querySelectorAll('[data-change-candidate]').forEach(button => {
                 button.addEventListener('click', async () => {

@@ -5,6 +5,7 @@
 @{
     var puedeGestionar = ViewData["PuedeGestionarChecklistArranqueOperativa"] is bool pg && pg;
     var puedeEditar = ViewData["PuedeEditarChecklistArranqueOperativa"] is bool pe && pe;
+    var bloqueoConfiguracion = ViewData["BloqueoConfiguracionChecklistOperativa"] as string;
     var esperandoCalidad = Model.EstatusID == ProduccionChecklistEstatus.PendienteValidacionCalidad;
     var validado = Model.EstatusID == ProduccionChecklistEstatus.ValidadoPorCalidad;
     var rechazado = Model.EstatusID == ProduccionChecklistEstatus.RechazadoRequiereAjuste;
@@ -309,6 +310,10 @@
     </div>
     <div class="poc-progress"><span data-poc-progress style="width:@porcentaje.ToString("0", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
 
+    @if (!string.IsNullOrWhiteSpace(bloqueoConfiguracion))
+    {
+        <div class="poc-alert warn"><i class="bi bi-lock-fill me-1"></i>@bloqueoConfiguracion</div>
+    }
     @if (rechazado && !string.IsNullOrWhiteSpace(Model.CalidadMotivoDevolucion))
     {
         <div class="poc-alert bad"><i class="bi bi-arrow-counterclockwise me-1"></i><strong>Devuelto por Calidad:</strong> @Model.CalidadMotivoDevolucion</div>
@@ -319,7 +324,7 @@
     }
     else if (validado)
     {
-        <div class="poc-alert ok"><i class="bi bi-check-circle-fill me-1"></i><strong>Checklist validado por Calidad.</strong> El flujo puede continuar con la configuración técnica.</div>
+        <div class="poc-alert ok"><i class="bi bi-check-circle-fill me-1"></i><strong>Checklist validado por Calidad.</strong> Continúa con las primeras piezas y la liberación de Calidad.</div>
     }
     else if (!puedeGestionar)
     {
@@ -377,14 +382,19 @@
                                 <input type="hidden" name="@(prefix + ".ChecklistArranqueDetalleID")" value="@p.ChecklistArranqueDetalleID" />
                                 <input type="hidden" name="@(prefix + ".PreguntaID")" value="@p.PreguntaID" />
                                 <input type="hidden" name="@(prefix + ".Confirmado")" value="true" />
+                                @if (p.AutomaticaPorRecepcionMP)
+                                {
+                                    <input type="hidden" name="@(prefix + ".Resultado")" value="OK" />
+                                    <div class="alert alert-success py-1 small"><i class="bi bi-lock-fill"></i> @p.EvidenciaRecepcionMP</div>
+                                }
                                 <div class="poc-options">
-                                    <input id="poc_@p.PreguntaID-ok" type="radio" name="@(prefix + ".Resultado")" value="OK" data-poc-resultado @(resultado == "OK" ? "checked" : null) />
+                                    <input id="poc_@p.PreguntaID-ok" type="radio" name="@(prefix + ".Resultado")" value="OK" data-poc-resultado @(p.AutomaticaPorRecepcionMP ? "disabled" : null) @(resultado == "OK" ? "checked" : null) />
                                     <label for="poc_@p.PreguntaID-ok">OK</label>
-                                    <input id="poc_@p.PreguntaID-nok" type="radio" name="@(prefix + ".Resultado")" value="NOK" data-poc-resultado @(resultado == "NOK" ? "checked" : null) />
+                                    <input id="poc_@p.PreguntaID-nok" type="radio" name="@(prefix + ".Resultado")" value="NOK" data-poc-resultado @(p.AutomaticaPorRecepcionMP ? "disabled" : null) @(resultado == "NOK" ? "checked" : null) />
                                     <label for="poc_@p.PreguntaID-nok">NOK</label>
                                     @if (p.PermiteNA)
                                     {
-                                        <input id="poc_@p.PreguntaID-na" type="radio" name="@(prefix + ".Resultado")" value="NA" data-poc-resultado @(resultado == "NA" ? "checked" : null) />
+                                        <input id="poc_@p.PreguntaID-na" type="radio" name="@(prefix + ".Resultado")" value="NA" data-poc-resultado @(p.AutomaticaPorRecepcionMP ? "disabled" : null) @(resultado == "NA" ? "checked" : null) />
                                         <label for="poc_@p.PreguntaID-na">N/A</label>
                                     }
                                 </div>

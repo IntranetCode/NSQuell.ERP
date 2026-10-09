@@ -66,7 +66,7 @@
         if(!body.querySelector('[data-cierre-auto-refrescar="true"]')) return;
         timer=setTimeout(()=>{
             if(!root.isConnected) return;
-            if(document.hidden||body.querySelector('input:focus,textarea:focus,select:focus')){programar();return;}
+            if(document.hidden||body.querySelector('input:focus,textarea:focus,select:focus')||body.querySelector('[data-finalizacion-revision]:not([hidden])')||body.querySelector('[data-finalizacion-justificada][data-enviando="1"]')){programar();return;}
             cargar(false);
         },20000);
     }

@@ -615,6 +615,10 @@ else
                                                 <i><b data-nsq-style="width:@item.Porcentaje%"></b></i>
                                             </span>
                                         </a>
+                                        @if (x.TieneNumeroOF)
+                                        {
+                                            <a class="btn btn-sm btn-outline-primary my-1" href="@Url.Action("Movimiento", "AlmacenMP", new { materialId=item.CatalogoID, solicitudProduccionId=x.SolicitudProduccionID, entregaOF=true })#purga-extra"><i class="fa-solid fa-droplet"></i> MP extra para purga</a>
+                                        }
                                         @if (item.TieneDevolucionPendiente)
                                         {
                                             <div class="of-return-detail">

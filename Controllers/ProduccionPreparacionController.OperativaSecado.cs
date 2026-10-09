@@ -56,7 +56,9 @@ namespace ERP.NSQuell.Controllers
 
             var ahora = await ObtenerFechaServidorSecadoAsync(cn);
             var configuracion = await CargarConfiguracionSecadoAsync(cn);
-            var tolvas = await CargarTolvasSecadoAsync(cn);
+            var tolvas = await CargarTolvasSecadoAsync(cn, incluirInactivas: true);
+            var maquinas = await CargarMaquinasPreparacionAsync(cn);
+            var equiposSinConfig = await CargarEquiposSecadoSinConfigAsync(cn);
             var materiales = await CargarMaterialesSecadoAsync(null, null, ahora, configuracion, cn);
 
             await EnriquecerSecadoLhRhAsync(materiales, ahora, configuracion, cn);
@@ -124,11 +126,13 @@ namespace ERP.NSQuell.Controllers
                 PuedeGestionarSecado = permisos.PuedeGestionarSecado,
                 Configuracion = configuracion,
                 Tolvas = tolvas,
+                Maquinas = maquinas,
                 Materiales = materialesPrograma,
                 PendientesPlaneacion = pendientesPlaneacion
             };
 
             ViewData["ProgramaProduccionID"] = programaProduccionId;
+            ViewData["EquiposSecadoSinConfig"] = equiposSinConfig;
 
             return PartialView(
                 "~/Views/ProduccionOperativa/Acciones/_SecadoContenido.cshtml",
@@ -181,6 +185,81 @@ namespace ERP.NSQuell.Controllers
             return ConvertirResultadoSecadoOperativa(
                 resultado,
                 "La carga de secado fue finalizada correctamente.");
+        }
+
+        private static async Task<List<ProduccionPreparacionMaquinaVm>> CargarEquiposSecadoSinConfigAsync(SqlConnection cn)
+        {
+            var equipos = new List<ProduccionPreparacionMaquinaVm>();
+            const string sql = @"
+SELECT m.MaquinaID,m.Codigo,m.Nombre
+FROM dbo.ERP_Maquinas m
+WHERE m.Activo=1
+  AND (UPPER(m.Area) LIKE N'%SECADO%' OR UPPER(m.Codigo) LIKE N'%TOLVA%' OR UPPER(m.Nombre) LIKE N'%TOLVA%')
+  AND NOT EXISTS(SELECT 1 FROM dbo.Produccion_SecadoTolvas t WHERE t.MaquinaID=m.MaquinaID)
+ORDER BY m.Codigo,m.MaquinaID;";
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+                equipos.Add(new ProduccionPreparacionMaquinaVm
+                {
+                    MaquinaID = Convert.ToInt32(rd["MaquinaID"]),
+                    Codigo = rd["Codigo"]?.ToString()?.Trim() ?? string.Empty,
+                    Nombre = rd["Nombre"]?.ToString()?.Trim() ?? string.Empty
+                });
+            return equipos;
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ConfigurarEquipoSecadoOperativa(int maquinaId, decimal capacidadKg, string? tipoProcesoPermitido)
+        {
+            if (!UsuarioEnSesion())
+                return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó." });
+            var proceso = (tipoProcesoPermitido ?? string.Empty).Trim().ToUpperInvariant();
+            if (!ModelState.IsValid || maquinaId <= 0 || capacidadKg <= 0 || capacidadKg > 99999999999999.9999m ||
+                decimal.Round(capacidadKg, 4) != capacidadKg ||
+                (proceso != "SECADO" && proceso != "DESHUMIDIFICADO" && proceso != "AMBOS"))
+                return BadRequest(new { ok = false, mensaje = "Selecciona el equipo, su capacidad real en KG (hasta cuatro decimales) y los procesos que permite." });
+
+            var usuarioId = ObtenerUsuarioID();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            var permisos = await ObtenerPermisosPreparacionUsuarioAsync(usuarioId, cn);
+            if (!permisos.PuedeGestionarSecado) return StatusCode(StatusCodes.Status403Forbidden);
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                // Se configura un equipo real existente; nunca se crean capacidades supuestas.
+                const string sql = @"
+DECLARE @Codigo nvarchar(50),@Nombre nvarchar(150);
+SELECT @Codigo=Codigo,@Nombre=Nombre
+FROM dbo.ERP_Maquinas WITH(UPDLOCK,HOLDLOCK)
+WHERE MaquinaID=@MaquinaID AND Activo=1
+  AND (UPPER(Area) LIKE N'%SECADO%' OR UPPER(Codigo) LIKE N'%TOLVA%' OR UPPER(Nombre) LIKE N'%TOLVA%');
+IF @Codigo IS NULL THROW 51321,'El equipo no está activo o no pertenece al catálogo de equipos de secado.',1;
+IF EXISTS(SELECT 1 FROM dbo.Produccion_SecadoTolvas WITH(UPDLOCK,HOLDLOCK) WHERE MaquinaID=@MaquinaID)
+    THROW 51322,'Este equipo ya está configurado. Actualiza Secado para ver su estado.',1;
+IF EXISTS(SELECT 1 FROM dbo.Produccion_SecadoTolvas WITH(UPDLOCK,HOLDLOCK) WHERE Codigo=@Codigo)
+    THROW 51323,'El código ya pertenece a otra tolva. Revisa el catálogo antes de continuar.',1;
+INSERT dbo.Produccion_SecadoTolvas
+(MaquinaID,Codigo,Nombre,CapacidadKg,TipoProcesoPermitido,DisponibleOperativamente,EsDatoTemporal,Observaciones,Activo,FechaCreacion,FechaModificacion)
+VALUES(@MaquinaID,@Codigo,@Nombre,@CapacidadKg,@Proceso,1,0,
+    N'Configurado desde Secado operativo por usuario '+CONVERT(nvarchar(20),@UsuarioID)+N'. Capacidad y proceso capturados por Producción.',1,SYSDATETIME(),NULL);";
+                await using var cmd = new SqlCommand(sql, cn, tx);
+                cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
+                var capacidad = cmd.Parameters.Add("@CapacidadKg", SqlDbType.Decimal);
+                capacidad.Precision = 18; capacidad.Scale = 4; capacidad.Value = capacidadKg;
+                cmd.Parameters.Add("@Proceso", SqlDbType.NVarChar, 30).Value = proceso;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
+                await tx.CommitAsync();
+                return Json(new { ok = true, mensaje = "Equipo configurado. Ya puedes seleccionarlo para iniciar o cambiar una carga de secado." });
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                return BadRequest(new { ok = false, mensaje = "No fue posible configurar el equipo: " + ex.Message });
+            }
         }
 
         private IActionResult ConvertirResultadoSecadoOperativa(

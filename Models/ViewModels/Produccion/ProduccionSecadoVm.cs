@@ -560,6 +560,7 @@ namespace ERP.NSQuell.Models
     {
         public long SecadoCargaID { get; set; }
         public int TolvaNuevaID { get; set; }
+        public decimal? CantidadMoverKg { get; set; }
         public string? MotivoCambio { get; set; }
     }
 

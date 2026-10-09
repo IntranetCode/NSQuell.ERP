@@ -801,7 +801,7 @@
             @if (!Model.ProduccionTerminadaConjunta && bloqueos.Count > 0)
             {
                 <section class="pcc-section">
-                    <h4><i class="bi bi-exclamation-diamond me-1"></i>Pendientes que impiden terminar Producción</h4>
+                    <h4><i class="bi bi-exclamation-diamond me-1"></i>Pendientes detectados antes de finalizar Producción</h4>
                     <div class="pcc-blockers">
                         @foreach (var item in bloqueosCalidad)
                         {
@@ -840,25 +840,38 @@
                         </section>
                     }
 
-                    @if (Model.MaquinaLiberadaConjunta && !Model.ProduccionTerminadaConjunta)
+                    @if (!Model.ProduccionTerminadaConjunta)
                     {
                         <section class="pcc-action">
-                            <h4><i class="bi bi-stop-circle me-1"></i>Terminar Producción</h4>
-                            <p>Cierra la ejecución productiva después de validar cantidades, cajas, paros, tiempo extra y pendientes de Calidad.</p>
-                            @if (Model.PuedeTerminarProduccion)
+                            <h4><i class="bi bi-stop-circle me-1"></i>Finalizar producción y liberar máquina</h4>
+                            <p>Revisa los pendientes aquí mismo. Si falta algo, escribe la justificación para finalizar@(Model.EsLhRh ? " ambas OF LH/RH" : "") y liberar la máquina. Calidad y Almacén PT mantienen sus pendientes.</p>
+                            @if (!Model.SoloLectura && Model.PuedeGestionarTerminacion)
                             {
-                                <form data-cierre-form data-requiere-confirmacion action="@urlTerminar" method="post">
+                                <form data-finalizacion-justificada action="@Url.Action("FinalizarConJustificacionOperativa", "Produccion")" method="post">
                                     @Html.AntiForgeryToken()
-                                    <input type="hidden" name="EjecucionProduccionID" value="@Model.Actual.EjecucionProduccionID" />
-                                    <input type="hidden" name="TerminarParcial" value="false" />
-                                    <textarea name="Observaciones" maxlength="500" placeholder="Observaciones de terminación (opcional)"></textarea>
-                                    <label class="pcc-check"><input type="checkbox" data-confirmacion-cierre /><span>Confirmo que la corrida física terminó y que deseo cerrar la ejecución@(Model.EsLhRh ? " de ambas OF LH/RH" : "").</span></label>
-                                    <div class="pcc-btnrow"><button type="submit" class="pcc-btn success" disabled data-boton-confirmado><i class="bi bi-check2-circle"></i>Terminar Producción</button></div>
-                                    <div class="pcc-inline-msg" data-cierre-mensaje></div>
+                                    <input type="hidden" name="ejecucionProduccionID" value="@Model.Actual.EjecucionProduccionID" />
+                                    <div data-finalizacion-revision hidden>
+                                        <div class="pcc-notice" style="margin-top:0"><div><strong data-finalizacion-resumen></strong><ul data-finalizacion-pendientes></ul></div></div>
+                                        <label class="mt-2">Justificación <span data-finalizacion-obligatoria></span></label>
+                                        <textarea name="justificacion" maxlength="400" placeholder="Explica por qué se finaliza con estos pendientes"></textarea>
+                                        <label class="pcc-check"><input type="checkbox" name="aceptarPendientes" value="true" /><span>Confirmo que terminó la corrida física y acepto los pendientes mostrados.</span></label>
+                                    </div>
+                                    <div class="pcc-btnrow"><button type="submit" class="pcc-btn success"><i class="bi bi-check2-circle"></i><span data-finalizacion-boton>Finalizar producción</span></button></div>
+                                    <div class="pcc-inline-msg" data-cierre-mensaje role="status" aria-live="polite"></div>
                                 </form>
                             }
-                            else if (Model.PuedeTerminarParcial)
+                            else
                             {
+                                <div class="pcc-notice info"><div>Vista de consulta. Se requiere permiso de Producción para finalizar.</div></div>
+                            }
+                        </section>
+                    }
+
+
+                    @if (Model.MaquinaLiberadaConjunta && !Model.ProduccionTerminadaConjunta && Model.PuedeTerminarParcial)
+                    {
+                        <section class="pcc-action">
+                            <h4>Terminación parcial autorizada por Planeación</h4>
                                 <form data-cierre-form data-requiere-confirmacion action="@urlTerminar" method="post">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="EjecucionProduccionID" value="@Model.Actual.EjecucionProduccionID" />
@@ -869,11 +882,6 @@
                                     <div class="pcc-btnrow"><button type="submit" class="pcc-btn dark" disabled data-boton-confirmado><i class="bi bi-stop-fill"></i>Ejecutar terminación parcial</button></div>
                                     <div class="pcc-inline-msg" data-cierre-mensaje></div>
                                 </form>
-                            }
-                            else
-                            {
-                                <div class="pcc-notice info" style="margin-top:0"><i class="bi bi-hourglass-split"></i><div>La terminación aún no está habilitada. Revisa los pendientes mostrados arriba.</div></div>
-                            }
                         </section>
                     }
 
@@ -958,6 +966,55 @@
             const texto=await response.text();
             return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
         }
+
+        root.querySelectorAll('[data-finalizacion-justificada]').forEach(form=>{
+            let revision='';
+            let pendientes=[];
+            let terminada=false;
+            const boton=form.querySelector('button[type="submit"]');
+            const etiqueta=form.querySelector('[data-finalizacion-boton]');
+            function revisar(data){
+                revision=data.revision||'';
+                pendientes=Array.isArray(data.pendientes)?data.pendientes:[];
+                form.querySelector('[data-finalizacion-revision]').hidden=false;
+                form.querySelector('[data-finalizacion-resumen]').textContent=pendientes.length?'Pendientes que quedarán registrados:':'Sin pendientes. Confirma para finalizar y liberar la máquina.';
+                const lista=form.querySelector('[data-finalizacion-pendientes]');
+                lista.replaceChildren();
+                pendientes.forEach(texto=>{const li=document.createElement('li');li.textContent=texto;lista.appendChild(li);});
+                form.querySelector('[data-finalizacion-obligatoria]').textContent=pendientes.length?'(obligatoria)':'(opcional)';
+                form.elements.aceptarPendientes.checked=false;
+                etiqueta.textContent='Confirmar finalización y liberar máquina';
+            }
+            form.addEventListener('submit',async event=>{
+                event.preventDefault();
+                if(form.dataset.enviando==='1'||terminada) return;
+                if(revision&&!form.elements.aceptarPendientes.checked){mostrar(form,'Confirma la finalización y los pendientes mostrados.',false);return;}
+                if(revision&&pendientes.length&&!form.elements.justificacion.value.trim()){
+                    mostrar(form,'Escribe la justificación para finalizar con pendientes.',false);
+                    form.elements.justificacion.focus();return;
+                }
+                form.dataset.enviando='1';boton.disabled=true;
+                try{
+                    const body=new FormData(form);
+                    body.set('confirmar',revision?'true':'false');
+                    body.set('revision',revision);
+                    const response=await fetch(form.action,{method:'POST',body,credentials:'same-origin',cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest'}});
+                    if(!(response.headers.get('content-type')||'').includes('application/json')) throw new Error('No se recibió una respuesta válida. Actualiza la sesión e intenta nuevamente.');
+                    const data=await response.json();
+                    if(!response.ok||data.ok===false) throw new Error(data.mensaje||'No se pudo finalizar producción.');
+                    if(!data.finalizada){revisar(data);mostrar(form,data.mensaje,false);return;}
+                    terminada=true;etiqueta.textContent='Producción finalizada';
+                    mostrar(form,data.mensaje,true);
+                    document.dispatchEvent(new CustomEvent('nsq:produccion-finalizada'));
+                    window.setTimeout(()=>{
+                        const loader=root.closest('[data-pcl-cierre-loader]');
+                        if(loader) loader.dispatchEvent(new CustomEvent('nsq:cierre-actualizado'));
+                        else root.closest('[data-nsq-operativa-centro]')?.querySelector('[data-nsq-operativa-refrescar]')?.click();
+                    },1200);
+                }catch(error){mostrar(form,error?.message||'No se pudo finalizar producción.',false);}
+                finally{form.dataset.enviando='0';boton.disabled=terminada;}
+            });
+        });
 
         root.querySelectorAll('[data-requiere-confirmacion]').forEach(form=>{
             const check=form.querySelector('[data-confirmacion-cierre]');

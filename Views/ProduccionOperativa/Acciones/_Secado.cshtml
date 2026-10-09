@@ -142,6 +142,37 @@
             });
         }
 
+        function configurarCambiosTolva(scope){
+            scope.querySelectorAll('[data-ps-move-form]').forEach(form=>{
+                if(form.dataset.moveWired==='1') return;
+                form.dataset.moveWired='1';
+                const total=numero(form.dataset.psCantidadOriginal);
+                const select=form.querySelector('[data-ps-move-tolva]');
+                const cantidad=form.querySelector('[data-ps-move-cantidad]');
+                const resumen=form.querySelector('[data-ps-move-resumen]');
+                const formato=n=>n.toLocaleString('es-MX',{maximumFractionDigits:4});
+                const recalcular=(ajustar=false)=>{
+                    const capacidad=numero(select?.options[select.selectedIndex]?.dataset?.capacity);
+                    const maximo=capacidad>0?Math.min(total,capacidad):total;
+                    cantidad.max=maximo.toFixed(4);
+                    if(ajustar&&numero(cantidad.value)>maximo) cantidad.value=maximo.toFixed(4);
+                    const mover=numero(cantidad.value);
+                    const restante=Math.round((total-mover)*10000)/10000;
+                    cantidad.setCustomValidity(mover<=0?'Indica los kilos a mover.':mover>total
+                        ?`Sólo hay ${formato(total)} KG en la carga actual.`:capacidad>0&&mover>capacidad
+                        ?`Esta tolva admite hasta ${formato(capacidad)} KG.`:restante>0&&restante<0.0006
+                        ?'Deja al menos 0.0006 KG en la tolva actual o mueve toda la carga.':'');
+                    if(resumen) resumen.textContent=mover>0&&mover<=maximo
+                        ?`${formato(mover)} KG se moverán; ${formato(Math.max(0,restante))} KG permanecerán en la tolva actual. El tiempo de secado continúa.`
+                        :`Puedes mover hasta ${formato(maximo)} KG a esta tolva.`;
+                    form.dataset.confirm=`¿Confirmas mover ${formato(mover)} KG? Quedarán ${formato(Math.max(0,restante))} KG en la tolva actual. El tiempo de secado continuará sin reiniciarse.`;
+                };
+                select?.addEventListener('change',()=>recalcular(true));
+                cantidad.addEventListener('input',()=>recalcular());
+                recalcular();
+            });
+        }
+
         function configurarFinalizacion(scope){
             scope.querySelectorAll('[data-ps-finish-form]').forEach(form=>{
                 const anticipada=form.dataset.anticipada==='true';
@@ -151,31 +182,44 @@
         }
 
         function actualizarContadores(scope){
-            const ahora=Date.now();
-
-            scope.querySelectorAll('[data-ps-fin-esperada]').forEach(el=>{
-                const raw=el.dataset.psFinEsperada;
-                if(!raw) return;
-                const fin=new Date(raw).getTime();
-                if(!Number.isFinite(fin)) return;
-
-                const diff=Math.ceil((fin-ahora)/60000);
+            const ahora=performance.now();
+            scope.querySelectorAll('[data-ps-reloj]').forEach(el=>{
+                // Diferencias calculadas con la hora del servidor; no dependen de zona horaria ni del reloj del PC.
+                if(!el.dataset.psBaseCliente) el.dataset.psBaseCliente=String(ahora);
+                const incremento=Math.max(0,(ahora-Number(el.dataset.psBaseCliente))/60000);
+                const transcurrido=Math.max(0,Math.floor(numero(el.dataset.psTranscurrido)+incremento));
+                const restantes=Math.ceil(numero(el.dataset.psRestantes)-incremento);
+                const textoDuracion=m=>`${Math.floor(m/60)} h ${m%60} min`;
+                const tiempo=el.querySelector('[data-ps-transcurrido-text]');
+                if(tiempo) tiempo.textContent=textoDuracion(transcurrido);
                 const estado=el.querySelector('[data-ps-tiempo]');
+                if(estado) estado.textContent=restantes>0
+                    ?`${textoDuracion(restantes)} restantes`
+                    :restantes===0?'Tiempo requerido cumplido':`${textoDuracion(Math.abs(restantes))} sobre el objetivo`;
+                el.classList.toggle('is-complete',restantes<=0);
 
-                if(!estado) return;
-
-                if(diff>0){
-                    const h=Math.floor(diff/60);
-                    const m=diff%60;
-                    estado.textContent=h>0?`${h} h ${m} min restantes`:`${m} min restantes`;
-                }else{
-                    estado.textContent=diff===0?'Tiempo cumplido':`${Math.abs(diff)} min sobre el objetivo`;
-                }
+                const form=el.closest('.ps-card')?.querySelector('[data-ps-finish-form]');
+                if(!form) return;
+                const anticipada=restantes>0;
+                form.dataset.anticipada=String(anticipada);
+                const confirmacion=form.querySelector('[name="ConfirmarFinalizacionAnticipada"]');
+                if(confirmacion) confirmacion.value=String(anticipada);
+                const motivo=form.querySelector('[data-ps-motivo-anticipado]');
+                if(motivo) motivo.required=anticipada;
+                form.querySelectorAll('[data-ps-anticipada-panel]').forEach(panel=>panel.hidden=!anticipada);
+                const aviso=form.querySelector('[data-ps-restantes-text]');
+                if(aviso) aviso.textContent=String(Math.max(0,restantes));
+                const boton=form.querySelector('[data-ps-finish-button]');
+                if(boton) boton.classList.toggle('danger',anticipada);
+                form.dataset.confirm=anticipada
+                    ?'¿Confirmas finalizar el secado antes del tiempo requerido? Se registrará la justificación.'
+                    :'¿Confirmas que la carga terminó físicamente su proceso de secado?';
             });
         }
 
         function configurarForms(scope){
             configurarTotales(scope);
+            configurarCambiosTolva(scope);
             configurarFinalizacion(scope);
 
             scope.querySelectorAll('form[data-secado-form]').forEach(form=>{
@@ -185,6 +229,7 @@
                 form.addEventListener('submit',async event=>{
                     event.preventDefault();
 
+                    actualizarContadores(scope);
                     if(!form.reportValidity()) return;
 
                     const confirmacion=form.dataset.confirm;
@@ -217,7 +262,7 @@
 
                         await cargar(false);
 
-                        window.setTimeout(()=>{
+                        if(!form.hasAttribute('data-ps-config-form')) window.setTimeout(()=>{
                             const centro=root.closest('[data-nsq-operativa-centro]');
                             const refrescar=centro?.querySelector('[data-nsq-operativa-refrescar]');
                             refrescar?.click();
@@ -279,6 +324,6 @@
                 return;
             }
             actualizarContadores(body);
-        },30000);
+        },1000);
     })();
 </script>

@@ -602,6 +602,55 @@
     font-weight:900;
 }
 
+/* NSQ_PRODUCCION_PERSONAL_SELECTOR_RH_REAL_V16_0 */
+.ppv16-rh-group {
+    padding:9px 6px 4px;
+    color:#526b83;
+    font-size:.65rem;
+    font-weight:800;
+    letter-spacing:.03em;
+}
+.ppv14-picker-result .ppv16-candidate-identity,
+.ppv14-modal-candidate .ppv16-candidate-identity {
+    flex:1;
+    min-width:0;
+    gap:3px;
+}
+.ppv16-candidate-name {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:4px 8px;
+    width:100%;
+}
+.ppv14-picker-result .ppv16-candidate-name strong,
+.ppv14-modal-candidate .ppv16-candidate-name strong {
+    font-size:.74rem;
+    overflow-wrap:anywhere;
+}
+.ppv16-rh-schedule {
+    padding:3px 6px;
+    border-radius:5px;
+    color:#5a4b35;
+    background:#fff3dd;
+    font-size:.7rem;
+    font-weight:800;
+    white-space:normal;
+}
+.ppv16-rh-priority-0 { color:#165837; background:#e5f5eb; }
+.ppv16-rh-priority-1 { color:#526579; background:#edf1f5; }
+.ppv14-picker-result .ppv16-candidate-identity small,
+.ppv14-modal-candidate .ppv16-candidate-identity small {
+    font-size:.65rem;
+    line-height:1.4;
+    overflow-wrap:anywhere;
+}
+html[data-nsq-theme="dark"] .ppv16-rh-group { color:#b9cadd; }
+html[data-nsq-theme="dark"] .ppv16-rh-schedule { color:#f2d9ad; background:#473c2c; }
+html[data-nsq-theme="dark"] .ppv16-rh-priority-0 { color:#bceace; background:#254a36; }
+html[data-nsq-theme="dark"] .ppv16-rh-priority-1 { color:#d0dce8; background:#354353; }
+
 .ppv14-picker-result small,
 .ppv14-modal-candidate small,
 .ppv14-program-option small,

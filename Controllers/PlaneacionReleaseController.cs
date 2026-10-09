@@ -2298,6 +2298,29 @@ WHERE ParteID = @ParteID;";
             d.PiezasDesdePT = ptUsable;
             d.PiezasAProducir = Math.Max(0, cantidad - ptUsable - programadoPendiente);
 
+            // El saldo de una entrega interrumpida se reconstruye con sus OF históricas,
+            // evitando volver a reservar piezas no hechas al recalcular el release.
+            const string sqlSaldoInterrumpido = @"
+SELECT ISNULL(SUM(CASE WHEN corte.ReferenciaID IS NOT NULL THEN ISNULL(pp.CantidadProducida,0)+ISNULL(pp.PiezasDesdePT,0) ELSE ISNULL(pp.CantidadProgramada,0) END),0)
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN
+(
+    SELECT DISTINCT ReferenciaID FROM dbo.Produccion_Eventos
+    WHERE TipoEvento=N'INTERRUPCION_OPERATIVA' AND ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+) corte ON corte.ReferenciaID=pp.ProgramaProduccionID
+WHERE pp.ReleaseDetalleID=@Detalle AND pp.Activo=1 AND ISNULL(pp.EstatusID,1)<>99
+HAVING MAX(CASE WHEN corte.ReferenciaID IS NOT NULL THEN 1 ELSE 0 END)=1;";
+            await using (var saldoCmd = new SqlCommand(sqlSaldoInterrumpido, cn, tx))
+            {
+                saldoCmd.Parameters.Add("@Detalle", SqlDbType.Int).Value = (object?)d.ReleaseDetalleID ?? DBNull.Value;
+                var cubierto = await saldoCmd.ExecuteScalarAsync();
+                if (cubierto != null && cubierto != DBNull.Value)
+                {
+                    d.ProduccionProgramadaPendiente = Convert.ToInt32(cubierto);
+                    d.PiezasAProducir = Math.Max(0, cantidad - Convert.ToInt32(cubierto));
+                }
+            }
+
             if (d.PiezasAProducir < 0)
                 d.PiezasAProducir = 0;
 
@@ -2389,7 +2412,15 @@ INNER JOIN dbo.SolicitudesProduccion s
 WHERE d.ParteID = @ParteID
   AND d.Activo = 1
   AND s.Activo = 1
-  AND ISNULL(s.EstatusID, 1) NOT IN (9, 99);";
+  AND ISNULL(s.EstatusID, 1) NOT IN (9, 99)
+  AND NOT EXISTS
+  (
+      SELECT 1 FROM dbo.Planeacion_ProgramaProduccion pp
+      INNER JOIN dbo.Produccion_Eventos corte ON corte.ReferenciaID=pp.ProgramaProduccionID
+      WHERE pp.SolicitudProduccionDetalleID=d.SolicitudProduccionDetalleID AND pp.Activo=1
+        AND corte.TipoEvento=N'INTERRUPCION_OPERATIVA'
+        AND corte.ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+  );";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId.Value;
@@ -2567,6 +2598,13 @@ OUTER APPLY
     WHERE pp.ReleaseDetalleID = d.ReleaseDetalleID
       AND pp.Activo = 1
       AND ISNULL(pp.EstatusID, 1) NOT IN (9, 99)
+      AND NOT EXISTS
+      (
+          SELECT 1 FROM dbo.Produccion_Eventos corte
+          WHERE corte.TipoEvento=N'INTERRUPCION_OPERATIVA'
+            AND corte.ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+            AND corte.ReferenciaID=pp.ProgramaProduccionID
+      )
     ORDER BY pp.ProgramaProduccionID DESC
 ) programaActivo
 WHERE d.ReleaseID = @ReleaseID

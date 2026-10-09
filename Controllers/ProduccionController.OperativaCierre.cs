@@ -120,6 +120,212 @@ namespace ERP.NSQuell.Controllers
             }
         }
 
+        // NSQ_FINALIZACION_JUSTIFICADA_V1_1: revisión y cierre físico atómicos.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> FinalizarConJustificacionOperativa(
+            int ejecucionProduccionID, bool confirmar = false,
+            string? revision = null, string? justificacion = null,
+            bool aceptarPendientes = false)
+        {
+            if (!UsuarioEnSesion() || ObtenerUsuarioID() <= 0) return Unauthorized();
+            if (ejecucionProduccionID <= 0)
+                return BadRequest(new { ok = false, mensaje = "Ejecución inválida." });
+            var usuarioId = ObtenerUsuarioID();
+            justificacion = justificacion?.Trim();
+            if (justificacion?.Length > 400)
+                return BadRequest(new { ok = false, mensaje = "La justificación admite hasta 400 caracteres." });
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
+                if (!(permisos.EsAdministradorERP || permisos.EsEncargadoProduccion ||
+                      permisos.EsAuxiliarProduccion || permisos.EsTecnicoProduccion || permisos.EsOperadorProduccion))
+                {
+                    await tx.RollbackAsync();
+                    return StatusCode(403, new { ok = false, mensaje = "No tienes permiso para finalizar producción." });
+                }
+                var actual = await ObtenerEjecucionAsync(ejecucionProduccionID, cn, tx)
+                    ?? throw new InvalidOperationException("No se encontró la ejecución activa.");
+                var relacion = await ObtenerParejaLhRhProduccionAsync(actual.ProgramaProduccionID, cn, tx);
+                var lados = new System.Collections.Generic.List<ProduccionEjecucionVm> { actual };
+                if (relacion != null)
+                {
+                    if (!relacion.EsCompatibleFisicamente || !relacion.EjecucionParejaID.HasValue)
+                        throw new InvalidOperationException("La pareja LH/RH no es consistente. No se puede finalizar una sola OF de la operación física.");
+                    var pareja = await ObtenerEjecucionAsync(relacion.EjecucionParejaID.Value, cn, tx)
+                        ?? throw new InvalidOperationException("No se encontró la ejecución pareja LH/RH.");
+                    if (pareja.MaquinaID != actual.MaquinaID || pareja.EjecucionProduccionID == actual.EjecucionProduccionID)
+                        throw new InvalidOperationException("La pareja LH/RH ya no corresponde a la misma máquina.");
+                    lados.Add(pareja);
+                }
+                if (lados.All(x => x.EstatusID is ProduccionEstatus.Terminado or ProduccionEstatus.ListaCierreDocumental or ProduccionEstatus.Cerrado))
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = true, finalizada = true, mensaje = "La producción ya está finalizada." });
+                }
+                if (lados.Any(x => x.EstatusID is not (ProduccionEstatus.EnPreparacion or ProduccionEstatus.EnProduccion or ProduccionEstatus.Pausado)))
+                    throw new InvalidOperationException("La ejecución debe estar en preparación, producción o pausa. No se alterarán estados ya cerrados o cancelados.");
+
+                var pendientes = new System.Collections.Generic.List<string>();
+                var estado = new System.Text.StringBuilder();
+                foreach (var lado in lados.OrderBy(x => x.EjecucionProduccionID))
+                {
+                    await using (var programa = new SqlCommand(@"SELECT COUNT(*) FROM dbo.Planeacion_ProgramaProduccion WITH(UPDLOCK,HOLDLOCK)
+WHERE ProgramaProduccionID=@ID AND Activo=1 AND EstatusID IN(1,2,3,4);", cn, tx))
+                    {
+                        programa.Parameters.Add("@ID", SqlDbType.Int).Value = lado.ProgramaProduccionID;
+                        if (Convert.ToInt32(await programa.ExecuteScalarAsync()) != 1)
+                            throw new InvalidOperationException("El programa cambió de estado o ya no está activo. Actualiza el modal.");
+                    }
+                    await RecalcularTotalesEjecucionAsync(lado.EjecucionProduccionID, usuarioId, cn, tx);
+                    var validacion = await ValidarTerminarProduccionAsync(lado.EjecucionProduccionID, false, cn, tx);
+                    var cierre = await CargarLadoCierreOperativoAsync(lado.ProgramaProduccionID, cn, tx)
+                        ?? throw new InvalidOperationException("No se pudo revisar el cierre de una OF.");
+                    if (cierre.EjecucionProduccionID != lado.EjecucionProduccionID)
+                        throw new InvalidOperationException("La ejecución vigente cambió. Actualiza el modal.");
+                    var prefijo = cierre.OFTexto + ": ";
+                    pendientes.AddRange(validacion.Bloqueos.Select(x => prefijo + x));
+                    if (!lado.FechaInicioReal.HasValue || lado.EstatusID == ProduccionEstatus.EnPreparacion)
+                        pendientes.Add(prefijo + "La producción en serie no se ha iniciado.");
+                    if (!lado.FechaLiberacionMaquina.HasValue)
+                    {
+                        var liberacion = await ValidarLiberacionMaquinaAsync(lado.EjecucionProduccionID, cn, tx);
+                        if (!liberacion.Permitido) pendientes.Add(prefijo + liberacion.Mensaje);
+                    }
+                    if (cierre.CajasPendientesRecepcionAlmacen > 0)
+                        pendientes.Add(prefijo + cierre.CajasPendientesRecepcionAlmacen + " caja(s) pendientes de recepción en Almacén PT.");
+                    // También se revisan sesiones pausadas: no deben quedar abiertas tras el cierre.
+                    await using (var cmd = new SqlCommand(@"SELECT COUNT(*) FROM dbo.Produccion_TiempoExtra WITH(UPDLOCK,HOLDLOCK)
+WHERE EjecucionProduccionID=@ID AND Activo=1 AND FechaHoraFin IS NULL AND Estado IN(N'EN_CURSO',N'PAUSADO');", cn, tx))
+                    {
+                        cmd.Parameters.Add("@ID", SqlDbType.Int).Value = lado.EjecucionProduccionID;
+                        if (Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0)
+                            pendientes.Add(prefijo + "Tiempo extra abierto: se cancelará la sesión pendiente al finalizar; los cortes registrados se conservarán.");
+                    }
+                    estado.Append(lado.EjecucionProduccionID).Append('|').Append(lado.EstatusID)
+                        .Append('|').Append(cierre.CantidadOK).Append('|').Append(cierre.CantidadPlaneada)
+                        .Append('|').Append(lado.FechaLiberacionMaquina?.Ticks).Append(';');
+                }
+                pendientes = pendientes.Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
+                estado.Append(string.Join("\n", pendientes));
+                string revisionActual;
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                    revisionActual = Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(estado.ToString())));
+                if (!confirmar || !string.Equals(revision, revisionActual, StringComparison.Ordinal))
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = true, finalizada = false, pendientes, revision = revisionActual,
+                        mensaje = confirmar ? "Los pendientes cambiaron. Revísalos y confirma nuevamente." : "Revisión completada. Confirma la finalización." });
+                }
+                if (pendientes.Count > 0 && (!aceptarPendientes || string.IsNullOrWhiteSpace(justificacion)))
+                {
+                    await tx.RollbackAsync();
+                    return BadRequest(new { ok = false, mensaje = "Escribe la justificación y acepta los pendientes para finalizar." });
+                }
+                var correlacion = Guid.NewGuid().ToString("N");
+                var ahora = DateTime.Now;
+                var nota = "Finalización de producción. Usuario " + usuarioId + ". " +
+                    (string.IsNullOrWhiteSpace(justificacion) ? "Sin pendientes." : justificacion);
+                var auditoria = "[Finalización operativa " + ahora.ToString("yyyy-MM-dd HH:mm:ss") + "] " + nota +
+                    "\r\nPendientes al finalizar: " + (pendientes.Count == 0 ? "ninguno" : string.Join(" | ", pendientes));
+                foreach (var lado in lados.OrderBy(x => x.EjecucionProduccionID))
+                {
+                    const string sql = @"
+UPDATE dbo.Produccion_Paros
+SET FechaFinParo=@Ahora, DuracionMinutos=DATEDIFF(MINUTE,FechaInicioParo,@Ahora),
+    EsMayorA15Minutos=CASE WHEN DATEDIFF(MINUTE,FechaInicioParo,@Ahora)>15 THEN 1 ELSE 0 END,
+    UsuarioModificacionID=@Usuario, FechaModificacion=@Ahora
+WHERE EjecucionProduccionID=@ID AND Activo=1 AND FechaFinParo IS NULL;
+UPDATE dbo.Produccion_TiempoExtra
+SET Estado=N'CANCELADO', FechaHoraFin=@Ahora, UsuarioCancelacionID=@Usuario,
+    FechaCancelacion=@Ahora, MotivoCancelacion=@Nota,
+    UsuarioModificacionID=@Usuario, FechaModificacion=@Ahora
+WHERE EjecucionProduccionID=@ID AND Activo=1 AND FechaHoraFin IS NULL AND Estado IN(N'EN_CURSO',N'PAUSADO');
+UPDATE dbo.Produccion_Ejecucion
+SET EstatusID=@Terminado, FechaFinReal=@Ahora,
+    FechaLiberacionMaquina=ISNULL(FechaLiberacionMaquina,@Ahora),
+    UsuarioLiberacionMaquinaID=CASE WHEN FechaLiberacionMaquina IS NULL THEN @Usuario ELSE UsuarioLiberacionMaquinaID END,
+    ObservacionesLiberacionMaquina=CASE WHEN FechaLiberacionMaquina IS NULL THEN @Nota ELSE ObservacionesLiberacionMaquina END,
+    UsuarioModificacionID=@Usuario, FechaModificacion=@Ahora
+WHERE EjecucionProduccionID=@ID AND Activo=1 AND EstatusID IN(2,3,4);
+SELECT @@ROWCOUNT;";
+                    await using var cmd = new SqlCommand(sql, cn, tx);
+                    cmd.Parameters.Add("@ID", SqlDbType.Int).Value = lado.EjecucionProduccionID;
+                    cmd.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime).Value = ahora;
+                    cmd.Parameters.Add("@Terminado", SqlDbType.Int).Value = ProduccionEstatus.Terminado;
+                    cmd.Parameters.Add("@Nota", SqlDbType.NVarChar, 500).Value = nota;
+                    if (Convert.ToInt32(await cmd.ExecuteScalarAsync()) != 1)
+                        throw new InvalidOperationException("La ejecución cambió durante la finalización. No se aplicó un cierre parcial.");
+                    await MarcarProgramaTerminadoAsync(lado.ProgramaProduccionID, usuarioId, cn, tx);
+                    await RegistrarFinalizacionOperativaAuditoriaAsync(usuarioId, lado.EjecucionProduccionID, correlacion, auditoria, cn, tx);
+                }
+                await ProcesarRetornoInterrupcionUrgenteAsync(actual.ProgramaProduccionID, usuarioId, cn, tx);
+                await tx.CommitAsync();
+                return Json(new { ok = true, finalizada = true,
+                    mensaje = lados.Count == 2 ? "Producciones LH/RH finalizadas y máquina liberada. Se registró la finalización." : "Producción finalizada y máquina liberada. Se registró la finalización." });
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                return BadRequest(new { ok = false, mensaje = "No fue posible finalizar producción: " + ex.Message });
+            }
+        }
+
+
+
+        // La bitácora existente admite mensajes de 500 caracteres. Se segmenta
+        // el registro completo, sin recortar la justificación ni los pendientes.
+        private static async Task RegistrarFinalizacionOperativaAuditoriaAsync(
+            int usuarioId, int ejecucionId, string correlacion, string auditoria,
+            SqlConnection cn, SqlTransaction tx)
+        {
+            int capacidad;
+            await using (var capacidadCmd = new SqlCommand(@"
+SELECT max_length FROM sys.columns
+WHERE object_id=OBJECT_ID(N'bitacora.Registros') AND name=N'Mensaje' AND system_type_id=231;", cn, tx))
+            {
+                var valor = await capacidadCmd.ExecuteScalarAsync();
+                if (valor == null || valor == DBNull.Value)
+                    throw new InvalidOperationException("No se encontró el campo de mensaje de la bitácora. No se finalizó la producción.");
+                var bytes = Convert.ToInt32(valor);
+                capacidad = bytes == -1 ? 500 : bytes / 2;
+            }
+            if (capacidad < 100)
+                throw new InvalidOperationException("El mensaje de bitácora tiene un tamaño incompatible con el registro de finalización.");
+            var maxParte = Math.Min(400, capacidad - 80);
+            var partes = new System.Collections.Generic.List<string>();
+            for (var inicio = 0; inicio < auditoria.Length;)
+            {
+                var largo = Math.Min(maxParte, auditoria.Length - inicio);
+                if (inicio + largo < auditoria.Length && char.IsHighSurrogate(auditoria[inicio + largo - 1])) largo--;
+                partes.Add(auditoria.Substring(inicio, largo));
+                inicio += largo;
+            }
+            const string sql = @"
+INSERT INTO bitacora.Registros
+    (FechaHoraUtc,IdUsuario,Accion,Resultado,Severidad,Mensaje,Modulo,Entidad,EntidadId,SolicitudId)
+VALUES
+    (SYSUTCDATETIME(),@Usuario,N'FINALIZAR_PRODUCCION',N'OK',1,@Mensaje,N'Produccion',N'Produccion_Ejecucion',@EntidadId,@Correlacion);";
+            for (var i = 0; i < partes.Count; i++)
+            {
+                var mensaje = "Finalización " + correlacion + " [" + (i + 1) + "/" + partes.Count + "] " + partes[i];
+                if (mensaje.Length > capacidad)
+                    throw new InvalidOperationException("El registro de finalización excede la capacidad de la bitácora.");
+                await using var cmd = new SqlCommand(sql, cn, tx);
+                cmd.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@Mensaje", SqlDbType.NVarChar, capacidad).Value = mensaje;
+                cmd.Parameters.Add("@EntidadId", SqlDbType.NVarChar, 120).Value = ejecucionId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                cmd.Parameters.Add("@Correlacion", SqlDbType.NVarChar, 64).Value = correlacion;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> LiberarMaquinaOperativa(ProduccionLiberarMaquinaOperativaPostVm vm)

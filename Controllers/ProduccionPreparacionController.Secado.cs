@@ -457,7 +457,7 @@ WHERE sm.Activo=1
                 {
                     if (string.Equals(componente.Estado, ProduccionSecadoEstadoMaterial.Finalizado, StringComparison.OrdinalIgnoreCase) || string.Equals(componente.Estado, ProduccionSecadoEstadoMaterial.Cancelado, StringComparison.OrdinalIgnoreCase))
                         throw new InvalidOperationException($"El material de la OF {componente.NumeroOF} ya no admite nuevas cargas.");
-                    if (componente.TieneCargaActiva) throw new InvalidOperationException($"La OF {componente.NumeroOF} ya tiene una carga de secado en proceso.");
+                    // Puede haber varias cargas físicas; las cantidades pendientes y la ocupación se validan bajo bloqueo.
                     if (componente.MinutosSecadoRequeridos <= 0) throw new InvalidOperationException($"La OF {componente.NumeroOF} no tiene un tiempo de secado válido.");
                     var pendiente = Math.Max(0m, componente.CantidadRecibidaKg - componente.CantidadAsignadaKg);
                     if (pendiente <= ProduccionSecadoReglas.ToleranciaCantidad) throw new InvalidOperationException($"La OF {componente.NumeroOF} ya tiene toda su materia prima asignada a secado.");
@@ -646,7 +646,7 @@ IF @@ROWCOUNT<>1 THROW 51301,'La cantidad disponible de uno de los materiales ca
         public async Task<IActionResult> CambiarTolvaSecado(ProduccionCambiarTolvaVm vm)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
-            if (vm.SecadoCargaID <= 0 || vm.TolvaNuevaID <= 0)
+            if (!ModelState.IsValid || vm.SecadoCargaID <= 0 || vm.TolvaNuevaID <= 0)
             {
                 TempData["Error"] = "No se recibió correctamente la carga o la nueva tolva.";
                 return RedirectToAction(nameof(Secado));
@@ -726,6 +726,12 @@ WHERE c.SecadoCargaID=@SecadoCargaID
                     return RedirectToAction(nameof(Secado));
                 }
 
+                var cantidadMoverKg = vm.CantidadMoverKg ?? cantidadKg;
+                if (cantidadMoverKg <= ProduccionSecadoReglas.ToleranciaCantidad || cantidadMoverKg > cantidadKg ||
+                    decimal.Round(cantidadMoverKg, 4) != cantidadMoverKg ||
+                    (cantidadMoverKg < cantidadKg && cantidadKg - cantidadMoverKg <= ProduccionSecadoReglas.ToleranciaCantidad))
+                    throw new InvalidOperationException($"Indica una cantidad positiva de hasta {cantidadKg:0.####} KG, con un máximo de cuatro decimales. La parcialidad debe dejar al menos 0.0006 KG en la tolva actual.");
+
                 const string sqlTolva = @"
 SELECT TOP(1)
     Codigo,
@@ -768,10 +774,10 @@ WHERE TolvaID=@TolvaID;";
                     return RedirectToAction(nameof(Secado));
                 }
 
-                if (cantidadKg - capacidadNueva > ProduccionSecadoReglas.ToleranciaCantidad)
+                if (cantidadMoverKg > capacidadNueva)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"No puedes mover {cantidadKg:0.####} KG a {tolvaNuevaCodigo}; su capacidad es {capacidadNueva:0.####} KG.";
+                    TempData["Error"] = $"No puedes mover {cantidadMoverKg:0.####} KG a {tolvaNuevaCodigo}; su capacidad es {capacidadNueva:0.####} KG.";
                     return RedirectToAction(nameof(Secado));
                 }
 
@@ -801,6 +807,14 @@ WHERE TolvaID=@TolvaID
                 }
 
                 var ahora = await ObtenerFechaServidorSecadoAsync(cn, tx);
+                if (cantidadMoverKg < cantidadKg)
+                {
+                    await DividirCargaSecadoV13Async(vm.SecadoCargaID, secadoMaterialId, tolvaAnteriorId, vm.TolvaNuevaID,
+                        cantidadKg, cantidadMoverKg, capacidadNueva, motivo!, usuarioId, ahora, cn, tx);
+                    await tx.CommitAsync();
+                    TempData["Success"] = $"Se movieron {cantidadMoverKg:0.####} KG a {tolvaNuevaCodigo}; {cantidadKg - cantidadMoverKg:0.####} KG permanecen en la tolva anterior. Ambas cargas conservan el tiempo de secado.";
+                    return RedirectToAction(nameof(Secado));
+                }
 
                 const string sqlCerrarSegmento = @"
 UPDATE dbo.Produccion_SecadoCargaSegmentos
@@ -1050,8 +1064,10 @@ IF @@ROWCOUNT<>1 THROW 51306,'No fue posible actualizar el avance total de uno d
                 foreach (var componente in componentes)
                 {
                     var nuevaCantidadFinalizada = Math.Min(componente.CantidadRecibidaKg, componente.CantidadFinalizadaKg + componente.CantidadCargaKg);
-                    var materialCompleto = nuevaCantidadFinalizada + ProduccionSecadoReglas.ToleranciaCantidad >= componente.CantidadRecibidaKg;
-                    var nuevoEstado = materialCompleto ? ProduccionSecadoEstadoMaterial.Finalizado : ProduccionSecadoEstadoMaterial.Parcial;
+                    var hayOtraCargaActiva = await TieneOtraCargaSecadoActivaAsync(componente.SecadoMaterialID, cn, tx);
+                    var materialCompleto = !hayOtraCargaActiva && nuevaCantidadFinalizada + ProduccionSecadoReglas.ToleranciaCantidad >= componente.CantidadRecibidaKg;
+                    var nuevoEstado = hayOtraCargaActiva ? ProduccionSecadoEstadoMaterial.EnProceso
+                        : materialCompleto ? ProduccionSecadoEstadoMaterial.Finalizado : ProduccionSecadoEstadoMaterial.Parcial;
                     todosCompletos &= materialCompleto;
                     totalRestante += Math.Max(0m, componente.CantidadRecibidaKg - nuevaCantidadFinalizada);
                     await using (var cmd = new SqlCommand(sqlActualizarMaterial, cn, tx))
@@ -1754,7 +1770,7 @@ ORDER BY CASE WHEN Codigo=N'GENERAL' THEN 0 ELSE 1 END,ConfiguracionID DESC;";
             return vm;
         }
 
-        private static async Task<List<ProduccionSecadoTolvaVm>> CargarTolvasSecadoAsync(SqlConnection cn)
+        private static async Task<List<ProduccionSecadoTolvaVm>> CargarTolvasSecadoAsync(SqlConnection cn, bool incluirInactivas = false)
         {
             var lista = new List<ProduccionSecadoTolvaVm>();
 
@@ -1798,10 +1814,11 @@ OUTER APPLY
       AND s.FechaFin IS NULL
     ORDER BY s.SecadoCargaSegmentoID DESC
 ) ocupacion
-WHERE t.Activo=1
+WHERE t.Activo=1 OR @IncluirInactivas=1
 ORDER BY m.Codigo,t.Codigo;";
 
             await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@IncluirInactivas", SqlDbType.Bit).Value = incluirInactivas;
             await using var rd = await cmd.ExecuteReaderAsync();
 
             while (await rd.ReadAsync())
@@ -2340,6 +2357,24 @@ WHERE c.TotalGrupo>1
             cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = await ObtenerFechaServidorSecadoAsync(cn, tx);
             await cmd.ExecuteNonQueryAsync();
         }
+        private static async Task<bool> TieneOtraCargaSecadoActivaAsync(long secadoMaterialId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT CONVERT(bit,CASE WHEN EXISTS
+(
+    SELECT 1 FROM dbo.Produccion_SecadoCargas c WITH(UPDLOCK,HOLDLOCK)
+    WHERE c.Activo=1 AND c.Estado=N'EN_PROCESO'
+      AND (c.SecadoMaterialID=@MaterialID OR EXISTS
+      (
+          SELECT 1 FROM dbo.Produccion_SecadoCargaMateriales cm WITH(UPDLOCK,HOLDLOCK)
+          WHERE cm.SecadoCargaID=c.SecadoCargaID AND cm.SecadoMaterialID=@MaterialID AND cm.Activo=1
+      ))
+) THEN 1 ELSE 0 END);";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@MaterialID", SqlDbType.BigInt).Value = secadoMaterialId;
+            return Convert.ToBoolean(await cmd.ExecuteScalarAsync());
+        }
+
         private static async Task ActualizarPreparacionSecadoFinalAsync(int programaProduccionId, int usuarioId, DateTime ahora, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
@@ -2934,6 +2969,160 @@ ORDER BY c.SecadoCargaID,cm.EsPrincipal DESC,cm.SecadoCargaMaterialID;";
                 SecadoMaterialID = x.Key,
                 CantidadKg = x.Sum(y => y.CantidadKg)
             }).OrderBy(x => x.SecadoMaterialID).ToList();
+        }
+
+        // NSQ_SECADO_PARCIAL_V1_3: divide kilos ya asignados; no vuelve a recibir ni asignar MP.
+        private static async Task<long> DividirCargaSecadoV13Async(
+            long cargaOrigenId, long materialPrincipalId, int tolvaOrigenId, int tolvaDestinoId,
+            decimal cantidadOriginal, decimal cantidadMover, decimal capacidadDestino,
+            string motivo, int usuarioId, DateTime ahora, SqlConnection cn, SqlTransaction tx)
+        {
+            var componentes = await CargarComponentesCargaSecadoAsync(cargaOrigenId, materialPrincipalId, cantidadOriginal, cn, tx);
+            if (componentes.Count == 0 || componentes.Sum(x => x.CantidadCargaKg) != cantidadOriginal)
+                throw new InvalidOperationException("Los kilos de las OF no coinciden con la carga. Revisa el registro antes de dividirla.");
+            var cantidadesMover = RepartirTrasladoSecadoV13(componentes.Select(x => x.CantidadCargaKg).ToList(), cantidadMover);
+            var restante = cantidadOriginal - cantidadMover;
+
+            const string sqlDividir = @"
+IF (SELECT COUNT(1) FROM dbo.Produccion_SecadoCargaSegmentos WITH(UPDLOCK,HOLDLOCK)
+    WHERE SecadoCargaID=@OrigenID AND TolvaID=@TolvaOrigenID AND Activo=1 AND FechaFin IS NULL)<>1
+    THROW 51310,'No se encontró el segmento activo de la carga original.',1;
+
+DECLARE @NumeroCarga INT;
+SELECT @NumeroCarga=ISNULL(MAX(NumeroCarga),0)+1
+FROM dbo.Produccion_SecadoCargas WITH(UPDLOCK,HOLDLOCK)
+WHERE SecadoMaterialID=@MaterialPrincipalID;
+
+INSERT dbo.Produccion_SecadoCargas
+(
+    SecadoMaterialID,GrupoLhRh,NumeroCarga,TolvaIDActual,CantidadKg,CapacidadTolvaKgSnapshot,DuracionRequeridaMinutos,Estado,
+    FechaDisponibleDesde,FechaAsignacionTolva,FechaInicioReal,FechaFinEsperada,FechaFinReal,MinutosEsperaAntesInicio,
+    DuracionRealMinutos,MinutosExcesoSecado,ExcedioTiempo,FinalizoAntesTiempo,MotivoFinalizacionAnticipada,
+    UsuarioInicioID,UsuarioFinID,Observaciones,Activo,UsuarioCreacionID,FechaCreacion,UsuarioModificacionID,FechaModificacion
+)
+OUTPUT INSERTED.SecadoCargaID
+SELECT
+    SecadoMaterialID,GrupoLhRh,@NumeroCarga,@TolvaDestinoID,@CantidadMover,@CapacidadDestino,DuracionRequeridaMinutos,Estado,
+    FechaDisponibleDesde,@Ahora,FechaInicioReal,FechaFinEsperada,NULL,MinutosEsperaAntesInicio,
+    NULL,NULL,0,0,NULL,UsuarioInicioID,NULL,
+    LEFT(CONCAT(N'Traslado parcial desde carga ',@OrigenID,N'. Motivo: ',@Motivo,N'. ',Observaciones),1000),
+    1,@UsuarioID,@Ahora,NULL,NULL
+FROM dbo.Produccion_SecadoCargas WITH(UPDLOCK,HOLDLOCK)
+WHERE SecadoCargaID=@OrigenID AND Activo=1 AND Estado=N'EN_PROCESO' AND CantidadKg=@CantidadOriginal;";
+            long cargaDestinoId;
+            await using (var cmd = new SqlCommand(sqlDividir, cn, tx))
+            {
+                cmd.Parameters.Add("@OrigenID", SqlDbType.BigInt).Value = cargaOrigenId;
+                cmd.Parameters.Add("@MaterialPrincipalID", SqlDbType.BigInt).Value = materialPrincipalId;
+                cmd.Parameters.Add("@TolvaOrigenID", SqlDbType.Int).Value = tolvaOrigenId;
+                cmd.Parameters.Add("@TolvaDestinoID", SqlDbType.Int).Value = tolvaDestinoId;
+                AgregarCantidadSecadoV13(cmd, "@CantidadOriginal", cantidadOriginal);
+                AgregarCantidadSecadoV13(cmd, "@CantidadMover", cantidadMover);
+                AgregarCantidadSecadoV13(cmd, "@CapacidadDestino", capacidadDestino);
+                cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500).Value = motivo;
+                var resultado = await cmd.ExecuteScalarAsync();
+                if (resultado == null || resultado == DBNull.Value)
+                    throw new InvalidOperationException("La carga original cambió mientras se realizaba el traslado.");
+                cargaDestinoId = Convert.ToInt64(resultado);
+            }
+
+            const string sqlRestante = @"
+UPDATE dbo.Produccion_SecadoCargas
+SET CantidadKg=@Restante,UsuarioModificacionID=@UsuarioID,FechaModificacion=@Ahora
+WHERE SecadoCargaID=@OrigenID AND Activo=1 AND Estado=N'EN_PROCESO' AND CantidadKg=@CantidadOriginal;
+IF @@ROWCOUNT<>1 THROW 51311,'No fue posible conservar los kilos restantes en la carga original.',1;";
+            await using (var cmd = new SqlCommand(sqlRestante, cn, tx))
+            {
+                cmd.Parameters.Add("@OrigenID", SqlDbType.BigInt).Value = cargaOrigenId;
+                AgregarCantidadSecadoV13(cmd, "@Restante", restante);
+                AgregarCantidadSecadoV13(cmd, "@CantidadOriginal", cantidadOriginal);
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            for (var i = 0; i < componentes.Count; i++)
+            {
+                var componente = componentes[i];
+                var mover = cantidadesMover[i];
+                var queda = componente.CantidadCargaKg - mover;
+                var sqlComponente = componente.SecadoCargaMaterialID.HasValue ? @"
+UPDATE dbo.Produccion_SecadoCargaMateriales
+SET CantidadKg=@Restante,UsuarioModificacionID=@UsuarioID,FechaModificacion=@Ahora
+WHERE SecadoCargaMaterialID=@ComponenteID AND SecadoCargaID=@OrigenID AND Activo=1 AND CantidadKg=@CantidadOriginal;
+IF @@ROWCOUNT<>1 THROW 51312,'Cambió un componente de la carga original.',1;" : @"
+INSERT dbo.Produccion_SecadoCargaMateriales
+(SecadoCargaID,SecadoMaterialID,CantidadKg,EsPrincipal,Activo,UsuarioCreacionID,FechaCreacion)
+VALUES(@OrigenID,@MaterialID,@Restante,@EsPrincipal,1,@UsuarioID,@Ahora);";
+                sqlComponente += @"
+INSERT dbo.Produccion_SecadoCargaMateriales
+(SecadoCargaID,SecadoMaterialID,CantidadKg,EsPrincipal,Activo,UsuarioCreacionID,FechaCreacion)
+VALUES(@DestinoID,@MaterialID,@CantidadMover,@EsPrincipal,1,@UsuarioID,@Ahora);";
+                await using (var cmd = new SqlCommand(sqlComponente, cn, tx))
+                {
+                    cmd.Parameters.Add("@ComponenteID", SqlDbType.BigInt).Value = (object?)componente.SecadoCargaMaterialID ?? DBNull.Value;
+                    cmd.Parameters.Add("@OrigenID", SqlDbType.BigInt).Value = cargaOrigenId;
+                    cmd.Parameters.Add("@DestinoID", SqlDbType.BigInt).Value = cargaDestinoId;
+                    cmd.Parameters.Add("@MaterialID", SqlDbType.BigInt).Value = componente.SecadoMaterialID;
+                    cmd.Parameters.Add("@EsPrincipal", SqlDbType.Bit).Value = componente.EsPrincipal;
+                    AgregarCantidadSecadoV13(cmd, "@CantidadOriginal", componente.CantidadCargaKg);
+                    AgregarCantidadSecadoV13(cmd, "@Restante", queda);
+                    AgregarCantidadSecadoV13(cmd, "@CantidadMover", mover);
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                var comentario = $"Traslado parcial: carga {cargaOrigenId} → {cargaDestinoId}. OF {componente.NumeroOF}: {mover:0.####} KG trasladados; {queda:0.####} KG permanecen. El tiempo de secado continúa. Motivo: {motivo}";
+                await AgregarHistorialSecadoAsync(componente.SecadoMaterialID, cargaOrigenId, "DIVISION_CARGA_SECADO", componente.Estado, componente.Estado, tolvaOrigenId, tolvaDestinoId, mover, comentario, usuarioId, ahora, cn, tx);
+                await AgregarHistorialSecadoAsync(componente.SecadoMaterialID, cargaDestinoId, "TRASLADO_PARCIAL_SECADO", componente.Estado, componente.Estado, tolvaOrigenId, tolvaDestinoId, mover, comentario, usuarioId, ahora, cn, tx);
+            }
+
+            const string sqlSegmento = @"
+INSERT dbo.Produccion_SecadoCargaSegmentos
+(SecadoCargaID,TolvaID,NumeroSegmento,FechaInicio,FechaFin,MinutosSegmento,EsCambioTolva,ReiniciaTiempoRequerido,
+ MotivoCambio,UsuarioInicioID,UsuarioFinID,Activo,FechaCreacion)
+VALUES(@DestinoID,@TolvaDestinoID,1,@Ahora,NULL,NULL,1,0,LEFT(CONCAT(N'Desde carga ',@OrigenID,N': ',@Motivo),500),@UsuarioID,NULL,1,@Ahora);";
+            await using (var cmd = new SqlCommand(sqlSegmento, cn, tx))
+            {
+                cmd.Parameters.Add("@DestinoID", SqlDbType.BigInt).Value = cargaDestinoId;
+                cmd.Parameters.Add("@OrigenID", SqlDbType.BigInt).Value = cargaOrigenId;
+                cmd.Parameters.Add("@TolvaDestinoID", SqlDbType.Int).Value = tolvaDestinoId;
+                cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500).Value = motivo;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
+            }
+            return cargaDestinoId;
+        }
+
+        private static void AgregarCantidadSecadoV13(SqlCommand cmd, string nombre, decimal cantidad)
+        {
+            var p = cmd.Parameters.Add(nombre, SqlDbType.Decimal);
+            p.Precision = 18;
+            p.Scale = 4;
+            p.Value = cantidad;
+        }
+
+        private static List<decimal> RepartirTrasladoSecadoV13(List<decimal> cantidades, decimal mover)
+        {
+            // Reparto proporcional LH/RH en unidades de 0.0001 KG; conserva exactamente cada OF y el total.
+            var total = cantidades.Sum();
+            if (mover <= 0 || mover >= total || cantidades.Any(x => x <= 0))
+                throw new InvalidOperationException("La cantidad parcial debe ser positiva y menor que la carga actual.");
+            var unidades = cantidades.Select(x => checked((long)(x * 10000m))).ToArray();
+            var unidadesMover = checked((long)(mover * 10000m));
+            var exactas = cantidades.Select(x => x / total * unidadesMover).ToArray();
+            var reparto = exactas.Select(x => (long)decimal.Floor(x)).ToArray();
+            var faltantes = unidadesMover - reparto.Sum();
+            var orden = Enumerable.Range(0, cantidades.Count).OrderByDescending(i => exactas[i] - reparto[i]).ThenBy(i => i).ToArray();
+            if (faltantes < 0 || faltantes > cantidades.Count)
+                throw new InvalidOperationException("No fue posible repartir los kilos con la precisión requerida.");
+            for (var i = 0; i < faltantes; i++) reparto[orden[i]]++;
+            if (Enumerable.Range(0, cantidades.Count).Any(i => reparto[i] <= 5 || unidades[i] - reparto[i] <= 5))
+                throw new InvalidOperationException("La parcialidad debe dejar al menos 0.0006 KG de cada OF en ambas tolvas. Ajusta los kilos a mover.");
+            return reparto.Select(x => x / 10000m).ToList();
         }
 
         private static async Task<List<SecadoComponenteOperacionInterno>> CargarComponentesCargaSecadoAsync(long secadoCargaId, long secadoMaterialPrincipalId, decimal cantidadTotalKg, SqlConnection cn, SqlTransaction tx)

@@ -86,6 +86,16 @@ public sealed class NotificacionDepartamentoActionFilter : IAsyncActionFilter
         if (!ResultadoFueExitoso(executed))
             return;
 
+        // NSQ_ALERTAS_STOCK_MP_V1_0: revisar datos confirmados antes de los retornos del filtro.
+        if (context.ModelState.IsValid &&
+            (controller.StartsWith("Planeacion", StringComparison.OrdinalIgnoreCase) ||
+             controller.StartsWith("Almacen", StringComparison.OrdinalIgnoreCase)))
+        {
+            await context.HttpContext.RequestServices
+                .GetRequiredService<AlmacenStockAlertaService>()
+                .RevisarAsync(context.HttpContext.RequestAborted);
+        }
+
         try
         {
             if (esCreacionOf)

@@ -750,8 +750,8 @@ OUTER APPLY
             pasos.Add(EvaluarEmbalaje(p, preparaciones, insumo));
             pasos.Add(EvaluarCambioMolde(p, preparaciones));
             pasos.Add(EvaluarInicioPreparacion(p, item));
-            pasos.Add(EvaluarChecklist(p, checklist, item));
             pasos.Add(EvaluarConfiguracion(configuracion, item));
+            pasos.Add(EvaluarChecklist(p, checklist, item));
             pasos.Add(EvaluarPrimerasPiezas(calidad, item));
             pasos.Add(EvaluarCalidad(calidad, item));
             pasos.Add(EvaluarInicioSerie(p, calidad, configuracion, item));
@@ -762,6 +762,25 @@ OUTER APPLY
             pasos.Add(EvaluarCalidadFinal(calidad, cierre, item));
             pasos.Add(EvaluarLiberacion(p, paro, cierre, item));
             pasos.Add(EvaluarCierre(p, cierre, item));
+            // NSQ_ORDEN_TECNICO_V1_3: los candados deben coincidir con el orden del modal.
+            var configurada = pasos.First(x => x.Clave == AgendaOperativaPasoClave.ConfiguracionCorrida).Completado;
+            var checklistEnviado = checklist != null && (checklist.EstatusID == ProduccionChecklistEstatus.PendienteValidacionCalidad || checklist.EstatusID == ProduccionChecklistEstatus.ValidadoPorCalidad);
+            if (item.EjecucionProduccionID.HasValue)
+            {
+                foreach (var paso in pasos.Where(x => x.Aplica && !x.Completado &&
+                    (x.Clave == AgendaOperativaPasoClave.ChecklistArranque || x.Clave == AgendaOperativaPasoClave.PrimerasPiezas || x.Clave == AgendaOperativaPasoClave.Calidad)))
+                {
+                    var motivo = !configurada ? "Primero confirma la configuración técnica de la corrida."
+                        : paso.Clave != AgendaOperativaPasoClave.ChecklistArranque && !checklistEnviado ? "Completa y envía el checklist de arranque antes de la validación de Calidad." : null;
+                    if (motivo == null) continue;
+                    paso.Estado = AgendaOperativaEstadoPaso.Bloqueado;
+                    paso.Bloqueado = true;
+                    paso.BloqueaFlujo = true;
+                    paso.EnProceso = false;
+                    paso.MotivoBloqueo = motivo;
+                    paso.Detalle = motivo;
+                }
+            }
             foreach (var paso in pasos) CompletarTiempoPaso(paso, ahora);
             return pasos;
         }
@@ -950,21 +969,21 @@ OUTER APPLY
         }
         private static AgendaOperativaPasoVm EvaluarChecklist(ProgramaBaseDto p, ChecklistDto? c, AgendaOperativaItemVm item)
         {
-            if (!p.EjecucionProduccionID.HasValue) return PasoEsperando(80, AgendaOperativaPasoClave.ChecklistArranque, "Checklist de arranque", AgendaOperativaArea.TecnicoProduccion, "Se habilita al iniciar la preparación.");
-            if (c == null) return Paso(80, AgendaOperativaPasoClave.ChecklistArranque, "Checklist de arranque", AgendaOperativaArea.TecnicoProduccion, AgendaOperativaEstadoPaso.Pendiente, true, false, false, true, "No existe todavía el checklist de arranque/liberación GQ-F-PR01-06.", p.FechaInicioProgramada, "Produccion", "Detalle", item.EjecucionProduccionID);
+            if (!p.EjecucionProduccionID.HasValue) return PasoEsperando(90, AgendaOperativaPasoClave.ChecklistArranque, "Checklist de arranque", AgendaOperativaArea.TecnicoProduccion, "Se habilita al iniciar la preparación.");
+            if (c == null) return Paso(90, AgendaOperativaPasoClave.ChecklistArranque, "Checklist de arranque", AgendaOperativaArea.TecnicoProduccion, AgendaOperativaEstadoPaso.Pendiente, true, false, false, true, "No existe todavía el checklist de arranque/liberación GQ-F-PR01-06.", p.FechaInicioProgramada, "Produccion", "Detalle", item.EjecucionProduccionID);
             var validado = c.EstatusID == ProduccionChecklistEstatus.ValidadoPorCalidad;
             var pendienteCalidad = c.EstatusID == ProduccionChecklistEstatus.PendienteValidacionCalidad;
             var estado = validado ? AgendaOperativaEstadoPaso.Completado : pendienteCalidad ? AgendaOperativaEstadoPaso.Esperando : AgendaOperativaEstadoPaso.EnProceso;
             var area = pendienteCalidad ? AgendaOperativaArea.Calidad : AgendaOperativaArea.TecnicoProduccion;
-            return Paso(80, AgendaOperativaPasoClave.ChecklistArranque, "Checklist de arranque", area, estado, true, validado, !validado && !pendienteCalidad, !validado, validado ? "Checklist validado por Calidad." : pendingText(c), p.FechaInicioProgramada, "Produccion", "Detalle", item.EjecucionProduccionID);
+            return Paso(90, AgendaOperativaPasoClave.ChecklistArranque, "Checklist de arranque", area, estado, true, validado, !validado && !pendienteCalidad, !validado, validado ? "Checklist validado por Calidad." : pendingText(c), p.FechaInicioProgramada, "Produccion", "Detalle", item.EjecucionProduccionID);
             static string pendingText(ChecklistDto x) => x.EstatusID == ProduccionChecklistEstatus.PendienteValidacionCalidad ? "Producción terminó la captura; falta validación de Calidad." : "El checklist todavía requiere captura o corrección antes de la validación.";
         }
         private static AgendaOperativaPasoVm EvaluarConfiguracion(ConfiguracionDto? c, AgendaOperativaItemVm item)
         {
-            if (!item.EjecucionProduccionID.HasValue) return PasoEsperando(90, AgendaOperativaPasoClave.ConfiguracionCorrida, "Configuración técnica de corrida", AgendaOperativaArea.TecnicoProduccion, "Se habilita al iniciar la preparación.");
+            if (!item.EjecucionProduccionID.HasValue) return PasoEsperando(80, AgendaOperativaPasoClave.ConfiguracionCorrida, "Configuración técnica de corrida", AgendaOperativaArea.TecnicoProduccion, "Se habilita al iniciar la preparación.");
             var completo = c != null && c.CavidadesUsadas > 0 && c.TiempoCicloSegundos > 0 && c.ContadorInicioVigencia.HasValue;
             var detalle = completo ? $"{c!.CavidadesUsadas} cavidad(es), {c.TiempoCicloSegundos:0.####} s, contador base {c.ContadorInicioVigencia:N0}." : "Falta confirmar cavidades reales, tiempo de ciclo y contador base de la máquina.";
-            return Paso(90, AgendaOperativaPasoClave.ConfiguracionCorrida, "Configuración técnica de corrida", AgendaOperativaArea.TecnicoProduccion, completo ? AgendaOperativaEstadoPaso.Completado : AgendaOperativaEstadoPaso.Pendiente, true, completo, false, !completo, detalle, item.FechaInicioProgramada, "Produccion", "Detalle", item.EjecucionProduccionID);
+            return Paso(80, AgendaOperativaPasoClave.ConfiguracionCorrida, "Configuración técnica de corrida", AgendaOperativaArea.TecnicoProduccion, completo ? AgendaOperativaEstadoPaso.Completado : AgendaOperativaEstadoPaso.Pendiente, true, completo, false, !completo, detalle, item.FechaInicioProgramada, "Produccion", "Detalle", item.EjecucionProduccionID);
         }
         private static AgendaOperativaPasoVm EvaluarPrimerasPiezas(CalidadDto? c, AgendaOperativaItemVm item)
         {

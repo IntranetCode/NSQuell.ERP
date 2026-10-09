@@ -983,6 +983,26 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
                     }
                 }
 
+                const string sqlTipoChecklistOrden = @"
+SELECT TOP(1) TipoChecklist FROM dbo.Produccion_ChecklistArranque WITH(UPDLOCK,HOLDLOCK)
+WHERE ChecklistArranqueID=@ChecklistID AND EjecucionProduccionID=@EjecucionID AND Activo=1;";
+                string tipoChecklistOrden;
+                await using (var cmdOrden = new SqlCommand(sqlTipoChecklistOrden, cn, tx))
+                {
+                    cmdOrden.Parameters.Add("@ChecklistID", SqlDbType.Int).Value = vm.ChecklistArranqueID;
+                    cmdOrden.Parameters.Add("@EjecucionID", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                    var tipo = await cmdOrden.ExecuteScalarAsync();
+                    if (tipo == null || tipo == DBNull.Value)
+                        throw new InvalidOperationException("El checklist no corresponde a la ejecución de Producción.");
+                    tipoChecklistOrden = tipo.ToString()?.Trim() ?? string.Empty;
+                }
+                if (string.Equals(tipoChecklistOrden, "ARRANQUE_LIBERACION", StringComparison.OrdinalIgnoreCase))
+                {
+                    var bloqueoConfiguracion = await ValidarConfiguracionAntesChecklistV13Async(vm.EjecucionProduccionID, cn, tx);
+                    if (!string.IsNullOrWhiteSpace(bloqueoConfiguracion))
+                        throw new InvalidOperationException(bloqueoConfiguracion);
+                }
+
                 var estatusActual =
                     await ObtenerEstatusChecklistAsync(
                         vm.ChecklistArranqueID,
@@ -1001,6 +1021,7 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
                         new { ejecucionProduccionId = vm.EjecucionProduccionID });
                 }
 
+                var mpAutomaticas = await ERP.NSQuell.Servicios.Produccion.ChecklistRecepcionMpService.ObtenerAsync(vm.ChecklistArranqueID,cn,tx);
                 var respuestasRecibidas = vm.Respuestas ?? new List<ProduccionChecklistRespuestaPostVm>();
 
                 if (!respuestasRecibidas.Any())
@@ -1012,6 +1033,12 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
 
                 foreach (var respuesta in respuestasRecibidas)
                 {
+                    var automaticaMp = mpAutomaticas.Values.FirstOrDefault(x => x.DetalleID==respuesta.ChecklistArranqueDetalleID);
+                    if (automaticaMp!=null)
+                    {
+                        respuesta.Resultado="OK";
+                        respuesta.Observaciones=automaticaMp.Texto;
+                    }
                     var resultadoNormalizado = NormalizarResultadoChecklist(respuesta.Resultado);
 
                     if (resultadoNormalizado == "__INVALIDO__")
@@ -1039,6 +1066,7 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
                         tx);
                 }
 
+                await ERP.NSQuell.Servicios.Produccion.ChecklistRecepcionMpService.AplicarAsync(vm.ChecklistArranqueID,usuarioId,cn,tx);
                 if (vm.EnviarACalidad)
                 {
                     var tienePreguntasSinRespuesta =
@@ -7182,6 +7210,8 @@ ORDER BY p.OrdenSeccion,p.OrdenPregunta,p.PreguntaID;";
 
                 seccion.Preguntas.Add(pregunta);
             }
+            await rd.DisposeAsync();
+            if (vm.PuedeEditarProduccion) await ERP.NSQuell.Servicios.Produccion.ChecklistRecepcionMpService.DecorarAsync(vm.ChecklistArranqueID,vm.Secciones.SelectMany(x=>x.Preguntas),cn);
         }
 
         private async Task<int> ObtenerEstatusChecklistAsync(

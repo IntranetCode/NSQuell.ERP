@@ -1,0 +1,96 @@
+@model ERP.NSQuell.Models.ProduccionCierreOperativoVm
+@using ERP.NSQuell.Models
+@using System
+@using System.Linq
+@{
+    var rootId = "poInterrumpir_" + Model.Actual.ProgramaProduccionID;
+    var puedeInterrumpir = !Model.SoloLectura && Model.PuedeGestionarTerminacion && Model.ParejaConsistente &&
+        Model.Lados.All(x => x.EstatusEjecucionID is ProduccionEstatus.EnPreparacion or ProduccionEstatus.EnProduccion or ProduccionEstatus.Pausado);
+}
+<div id="@rootId" class="p-3" data-interrupcion-operativa>
+    <h5 class="mb-2"><i class="bi bi-stop-circle text-danger"></i> Interrumpir producción</h5>
+    <p>La operación termina ahora y la máquina queda libre para programar el cambio de molde. Se conservan las piezas ya capturadas y el saldo pendiente vuelve al release.</p>
+    @if (Model.EsLhRh)
+    {
+        <div class="alert alert-info">Esta interrupción aplica a las dos OF de la operación LH/RH.</div>
+    }
+    <div class="table-responsive mb-3">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>OF / Parte</th><th>Programadas</th><th>OK capturadas</th><th>Sospechosas</th><th>Scrap</th><th>Saldo de esta OF</th></tr></thead>
+            <tbody>
+                @foreach (var lado in Model.Lados)
+                {
+                    <tr><td><strong>@lado.OFTexto</strong><br />@lado.ParteTexto<br /><small>@lado.DescripcionParte</small></td>
+                        <td>@lado.CantidadPlaneada.ToString("N0")</td><td>@lado.CantidadOK.ToString("N0")</td>
+                        <td>@lado.CantidadSospechosa.ToString("N0")</td><td>@lado.CantidadScrap.ToString("N0")</td>
+                        <td><strong>@Math.Max(0, lado.CantidadPlaneada - lado.CantidadOK).ToString("N0")</strong></td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="text-muted small">El saldo se calcula con las piezas OK y las demás OF del release. Las cajas y sus pendientes de Calidad y Almacén conservan su seguimiento.</p>
+    @if (puedeInterrumpir)
+    {
+        <form action="@Url.RouteUrl("NSQ_INTERRUMPIR_PLANEACION")" method="post" data-interrumpir-form>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="programaProduccionId" value="@Model.Actual.ProgramaProduccionID" />
+            <label class="form-label fw-bold" for="@(rootId)_motivo">Justificación</label>
+            <textarea class="form-control mb-3" id="@(rootId)_motivo" name="justificacion" rows="3" maxlength="500" required placeholder="Escribe por qué se interrumpe la producción"></textarea>
+            <div class="alert d-none" role="status" aria-live="polite" data-interrumpir-mensaje></div>
+            <button class="btn btn-danger" type="submit"><i class="bi bi-stop-circle"></i> Interrumpir producción y liberar máquina</button>
+        </form>
+    }
+    else
+    {
+        <div class="alert alert-secondary">@(Model.MotivoInconsistenciaPareja ?? (Model.ProduccionTerminadaConjunta ? "La producción ya terminó." : "Consulta en modo de lectura."))</div>
+    }
+</div>
+<script>
+(() => {
+    const root = document.getElementById('@rootId');
+    const form = root?.querySelector('[data-interrumpir-form]');
+    if (!form || form.dataset.enlazado === '1') return;
+    form.dataset.enlazado = '1';
+    const boton = form.querySelector('button[type="submit"]');
+    const mensaje = form.querySelector('[data-interrumpir-mensaje]');
+    let terminada = false;
+    function mostrar(texto, ok) {
+        mensaje.textContent = texto;
+        mensaje.classList.remove('d-none', 'alert-danger', 'alert-success');
+        mensaje.classList.add(ok ? 'alert-success' : 'alert-danger');
+    }
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (terminada || form.dataset.enviando === '1') return;
+        if (!form.elements.justificacion.value.trim()) {
+            mostrar('Escribe la justificación para interrumpir producción.', false);
+            form.elements.justificacion.focus(); return;
+        }
+        form.dataset.enviando = '1'; boton.disabled = true;
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST', body: new FormData(form), credentials: 'same-origin', cache: 'no-store',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (!(response.headers.get('content-type') || '').includes('application/json'))
+                throw new Error('Actualiza la sesión e intenta nuevamente.');
+            const data = await response.json();
+            if (!response.ok || data.ok !== true) throw new Error(data.mensaje || 'No fue posible interrumpir producción.');
+            terminada = true; boton.textContent = 'Producción interrumpida';
+            const saldos = (data.saldos || []).map(x => {
+                const of = x.ofTexto || x.OFTexto || 'OF';
+                return x.saldo == null ? of + ': sin release vinculado.' : of + ': saldo del release ' + Number(x.saldo).toLocaleString() + ' piezas.';
+            });
+            mostrar([data.mensaje, ...saldos].join(' '), true);
+            const centro = root.closest('[data-nsq-operativa-centro]');
+            if (centro) centro.dataset.nsqOperativaDirty = '1';
+            document.dispatchEvent(new CustomEvent('nsq:produccion-finalizada'));
+            window.setTimeout(() => window.location.reload(), 1800);
+        } catch (error) {
+            mostrar(error?.message || 'No fue posible interrumpir producción.', false);
+        } finally {
+            form.dataset.enviando = '0'; boton.disabled = terminada;
+        }
+    });
+})();
+</script>

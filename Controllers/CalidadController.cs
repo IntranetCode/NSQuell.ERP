@@ -885,6 +885,14 @@ INNER JOIN RegistrosDisponibles registro
             var inspeccion = await _context.CalidadInspecciones.FirstOrDefaultAsync(x => x.InspeccionID == model.InspeccionID && x.ChecklistArranqueID == model.ChecklistArranqueID);
             if (inspeccion == null)
                 return NotFound();
+
+            var bloqueoOrdenTecnico = await ValidarOrdenTecnicoCalidadV13Async(inspeccion);
+            if (!string.IsNullOrWhiteSpace(bloqueoOrdenTecnico))
+            {
+                TempData["Error"] = bloqueoOrdenTecnico;
+                return RedirectToAction(nameof(Detalle), new { id = inspeccion.InspeccionID });
+            }
+
             if (!CalidadEstados.PuedeAutorizarPrearranque(inspeccion.Estado))
             {
                 TempData["Error"] = "El checklist ya no está disponible para revisión de prearranque.";
@@ -1057,6 +1065,14 @@ WHERE ChecklistArranqueID = @ChecklistArranqueID
 
             if (inspeccion == null)
                 return NotFound();
+
+            var bloqueoOrdenTecnico = await ValidarOrdenTecnicoCalidadV13Async(inspeccion);
+            if (!string.IsNullOrWhiteSpace(bloqueoOrdenTecnico))
+            {
+                TempData["Error"] = bloqueoOrdenTecnico;
+                return RedirectToAction(nameof(Detalle), new { id = inspeccion.InspeccionID });
+            }
+
 
             if (!CalidadEstados.PuedeAutorizarPrearranque(inspeccion.Estado))
             {
@@ -1569,6 +1585,14 @@ FROM Preguntas;";
 
             if (inspeccion == null)
                 return NotFound();
+
+            var bloqueoOrdenTecnico = await ValidarOrdenTecnicoCalidadV13Async(inspeccion);
+            if (!string.IsNullOrWhiteSpace(bloqueoOrdenTecnico))
+            {
+                TempData["Error"] = bloqueoOrdenTecnico;
+                return RedirectToAction(nameof(Detalle), new { id = inspeccion.InspeccionID });
+            }
+
 
             if (!CalidadEstados
                 .PuedeAutorizarPrearranque(
@@ -2768,6 +2792,66 @@ ORDER BY
             }
 
             return corrida;
+        }
+
+        // NSQ_ORDEN_TECNICO_V1_3: también protege los POST directos de Calidad.
+        private async Task<string?> ValidarOrdenTecnicoCalidadV13Async(CalidadInspeccion inspeccion)
+        {
+            if (!inspeccion.ProgramaProduccionID.HasValue || inspeccion.ProgramaProduccionID.Value <= 0)
+                return null; // Las inspecciones manuales no tienen corrida de Producción.
+            if (!inspeccion.ChecklistArranqueID.HasValue)
+                return "Primero confirma la configuración técnica y envía el checklist de Producción a Calidad.";
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            const string sql = @"
+SELECT TOP(1) c.EstatusID,pp.Observaciones,
+    CASE WHEN EXISTS
+    (
+        SELECT 1 FROM dbo.Produccion_ConfiguracionCorrida cfg
+        WHERE cfg.EjecucionProduccionID=c.EjecucionProduccionID AND cfg.Activo=1 AND cfg.FechaFinVigencia IS NULL
+          AND cfg.CavidadesUsadas>0 AND cfg.TiempoCicloSegundos>0 AND cfg.ContadorInicioVigencia IS NOT NULL
+    ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS Configurada
+FROM dbo.Produccion_ChecklistArranque c
+INNER JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=c.EjecucionProduccionID AND e.Activo=1
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=c.ProgramaProduccionID AND pp.Activo=1
+WHERE c.ChecklistArranqueID=@ChecklistID AND c.ProgramaProduccionID=@ProgramaID AND c.Activo=1;";
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@ChecklistID", SqlDbType.Int).Value = inspeccion.ChecklistArranqueID.Value;
+            cmd.Parameters.Add("@ProgramaID", SqlDbType.Int).Value = inspeccion.ProgramaProduccionID.Value;
+            int estado;
+            string observaciones;
+            await using (var rd = await cmd.ExecuteReaderAsync())
+            {
+                if (!await rd.ReadAsync() || !Convert.ToBoolean(rd["Configurada"]))
+                    return "Primero confirma la configuración técnica de Producción: cavidades, ciclo y contador base.";
+                estado = Convert.ToInt32(rd["EstatusID"]);
+                observaciones = rd["Observaciones"] == DBNull.Value ? string.Empty : rd["Observaciones"]?.ToString() ?? string.Empty;
+            }
+            if (estado != ProduccionChecklistEstatus.PendienteValidacionCalidad && estado != ProduccionChecklistEstatus.ValidadoPorCalidad)
+                return "Producción debe completar y enviar el checklist de arranque antes de su validación por Calidad.";
+            var grupo = System.Text.RegularExpressions.Regex.Match(observaciones, @"NSQ_LHRH_PAIR:(\d+);", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (grupo.Success && int.TryParse(grupo.Groups[1].Value, out var grupoId) && grupoId > 0)
+            {
+                const string sqlPareja = @"
+SELECT COUNT(1),SUM(ISNULL(configurada.Lista,0))
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.Produccion_Ejecucion e ON e.ProgramaProduccionID=pp.ProgramaProduccionID AND e.Activo=1 AND e.EstatusID NOT IN(9,99)
+OUTER APPLY
+(
+    SELECT TOP(1) 1 AS Lista FROM dbo.Produccion_ConfiguracionCorrida cfg
+    WHERE cfg.EjecucionProduccionID=e.EjecucionProduccionID AND cfg.Activo=1 AND cfg.FechaFinVigencia IS NULL
+      AND cfg.CavidadesUsadas>0 AND cfg.TiempoCicloSegundos>0 AND cfg.ContadorInicioVigencia IS NOT NULL
+) configurada
+WHERE pp.Activo=1 AND pp.ProgramaProduccionID<>@ProgramaID
+  AND pp.Observaciones LIKE N'%NSQ_LHRH_PAIR:'+CONVERT(NVARCHAR(20),@GrupoID)+N';%';";
+                await using var cmdPareja = new SqlCommand(sqlPareja, cn);
+                cmdPareja.Parameters.Add("@ProgramaID", SqlDbType.Int).Value = inspeccion.ProgramaProduccionID.Value;
+                cmdPareja.Parameters.Add("@GrupoID", SqlDbType.Int).Value = grupoId;
+                await using var rdPareja = await cmdPareja.ExecuteReaderAsync();
+                if (!await rdPareja.ReadAsync() || Convert.ToInt32(rdPareja[0]) != 1 || rdPareja[1] == DBNull.Value || Convert.ToInt32(rdPareja[1]) != 1)
+                    return "Primero confirma la configuración técnica de ambas OF LH/RH antes de la validación de Calidad.";
+            }
+            return null;
         }
 
         private async Task<(bool Valida, string Motivo)>

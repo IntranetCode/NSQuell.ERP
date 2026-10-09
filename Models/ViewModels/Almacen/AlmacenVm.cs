@@ -111,6 +111,10 @@ public sealed class AlmacenMaterialFormVm
 
 public sealed class AlmacenMPMovimientoFormVm
 {
+    // NSQ_MP_PURGA_ALMACEN_V1_0: presupuesto independiente, máximo acumulado de 2 KG por OF.
+    [Range(typeof(decimal), "0", "2", ErrorMessage = "La purga debe estar entre 0 y 2 KG.")]
+    public decimal CantidadPurga { get; set; }
+    public string TipoMPPurga { get; set; } = "V";
     public string TipoMP { get; set; } = "VIRGEN";
 
     [Range(typeof(decimal), "0", "999999999", ErrorMessage = "La cantidad Virgen no puede ser negativa.")]

@@ -749,7 +749,16 @@
         display: none !important;
     }
     /* NSQ_BRAND_THEME_V7_END */
-</style><nav class="top-navbar @(plnEsModulo ? "top-navbar--planeacion" : string.Empty) @(esKioscoCerrado ? "top-navbar--operador" : string.Empty)" role="navigation" aria-label="Navegación principal">
+</style>
+<style id="NSQ_NOTIFICACIONES_TEMA_COMPARTIDO_V1_1">
+.top-navbar #notifDropdown{background:var(--panel-strong,#fff)!important;color:var(--ink,#14263f)!important;border-color:var(--line,#e6ecf3)!important}
+.top-navbar #notifDropdown .notif-header{background:var(--bg-soft,#f4f7fc)!important;color:var(--ink,#14263f)!important;border-color:var(--line,#e6ecf3)!important}
+.top-navbar #notifDropdown .notif-header strong{font-size:14px!important;font-weight:700!important;color:inherit!important}
+.top-navbar #notifDropdown .notif-title{color:var(--ink,#14263f)!important;font-size:13px!important;font-weight:700!important;line-height:1.45}
+.top-navbar #notifDropdown .notif-item,.top-navbar #notifDropdown .notif-msg,.top-navbar #notifDropdown .notif-date,.top-navbar #notifDropdown .notif-empty,.top-navbar #notifDropdown .notif-error{color:var(--muted,#586c85)!important}
+.top-navbar #notifDropdown .notif-actions a{color:var(--nsq-orange,#e97600)!important}
+</style>
+<nav class="top-navbar @(plnEsModulo ? "top-navbar--planeacion" : string.Empty) @(esKioscoCerrado ? "top-navbar--operador" : string.Empty)" role="navigation" aria-label="Navegación principal">
     <div class="navbar-content">
         <div class="navbar-left">
             <a href="@navbarHomeUrl" class="navbar-brand">

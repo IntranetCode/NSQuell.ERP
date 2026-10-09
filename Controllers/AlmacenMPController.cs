@@ -1131,11 +1131,8 @@ WHERE MaterialID=@Id AND Activo=1;";
                 return RedirectToAction("Index", "AlmacenOF");
             }
 
-            if (contexto.Pendiente <= 0.0005m)
-            {
-                Mensaje("warning", "La materia prima solicitada ya fue entregada completamente.");
-                return RedirectToAction("Index", "AlmacenOF");
-            }
+            // NSQ_MP_PURGA_ALMACEN_V1_0: también permite entregar únicamente purga.
+            // El POST vuelve a comprobar presupuesto acumulado y stock libre.
 
             vm.NumeroOF = contexto.NumeroOF;
             vm.Unidad = "KG";
@@ -1174,6 +1171,13 @@ WHERE MaterialID=@Id AND Activo=1;";
 
         model.EsEntregaOF = model.EsEntregaOF || (model.SolicitudProduccionID.HasValue && model.SolicitudProduccionID.Value > 0 && materialSolicitadoId.GetValueOrDefault() > 0);
         model.TipoMP = NormalizarTipoMP(model.TipoMP);
+        model.TipoMPPurga = NormalizarTipoMP(model.TipoMPPurga);
+        if (Request.HasFormContentType && string.IsNullOrWhiteSpace(Request.Form[nameof(model.CantidadPurga)]))
+        { model.CantidadPurga = 0m; ModelState.Remove(nameof(model.CantidadPurga)); }
+        if (model.CantidadPurga < 0m || model.CantidadPurga > 2m || decimal.Round(model.CantidadPurga, 3) != model.CantidadPurga)
+            ModelState.AddModelError(nameof(model.CantidadPurga), "Purga: de 0 a 2 KG, con máximo 3 decimales.");
+        if (model.CantidadPurga > 0m && (!model.EsEntregaOF || model.TipoMPPurga is not ("V" or "M")))
+            ModelState.AddModelError(nameof(model.CantidadPurga), "La purga requiere una OF y un tipo Virgen o Molido válido.");
 
         // SCRAP_V15_MP_LOTE
         var loteCapturado = model.Lote?.Trim();
@@ -1306,7 +1310,7 @@ WHERE MaterialID=@Id AND Activo=1;";
                 Math.Max(0m, model.CantidadVirgen)
                 + Math.Max(0m, model.CantidadMolido);
 
-            if (model.Cantidad <= 0.0005m)
+            if (model.Cantidad <= 0.0005m && model.CantidadPurga <= 0m)
             {
                 ModelState.AddModelError(
                     nameof(model.CantidadVirgen),
@@ -1483,7 +1487,7 @@ WHERE MaterialID=@Id AND Activo=1;";
                     return View(model);
                 }
 
-                if (contexto.Pendiente <= 0.0005m)
+                if (contexto.Pendiente <= 0.0005m && model.Cantidad > 0.0005m)
                 {
                     ModelState.AddModelError(
                         nameof(model.CantidadVirgen),
@@ -1541,20 +1545,23 @@ WHERE MaterialID = @Id
             var mismoMaterial = !model.EsEntregaOF
                 || model.MaterialID == materialSolicitadoID;
 
-            var movimientos = new List<(string TipoMP, decimal Cantidad, string Referencia)>();
+            var movimientos = new List<(string TipoMP, decimal Cantidad, string Referencia, bool EsPurga)>();
 
             if (model.EsEntregaOF)
             {
                 if (model.CantidadVirgen > 0.0005m)
-                    movimientos.Add(("V", model.CantidadVirgen, referenciaBase + "-V"));
+                    movimientos.Add(("V", model.CantidadVirgen, referenciaBase + "-V", false));
 
                 if (model.CantidadMolido > 0.0005m)
-                    movimientos.Add(("M", model.CantidadMolido, referenciaBase + "-M"));
+                    movimientos.Add(("M", model.CantidadMolido, referenciaBase + "-M", false));
             }
             else
             {
-                movimientos.Add((model.TipoMP, model.Cantidad, referenciaBase));
+                movimientos.Add((model.TipoMP, model.Cantidad, referenciaBase, false));
             }
+
+            if (model.EsEntregaOF && model.CantidadPurga > 0m)
+                movimientos.Add((model.TipoMPPurga, model.CantidadPurga, referenciaBase + "-PURGA-" + model.TipoMPPurga, true));
 
             foreach (var movimiento in movimientos)
             {
@@ -1572,9 +1579,35 @@ WHERE MaterialID = @Id
                 }
             }
 
+            if (model.CantidadPurga > 0m)
+            {
+                // El candado de la OF serializa el presupuesto, incluso usando materiales distintos.
+                await using var presupuesto = new SqlCommand(@"
+SELECT SolicitudProduccionID FROM dbo.SolicitudesProduccion WITH(UPDLOCK,HOLDLOCK)
+WHERE SolicitudProduccionID=@OF AND Activo=1;
+SELECT ISNULL(SUM(CantidadKg),0) FROM dbo.NSQ_AlmacenMP_Purgas WITH(UPDLOCK,HOLDLOCK)
+WHERE SolicitudProduccionID=@OF AND Activo=1;", connection, transaction);
+                presupuesto.Parameters.Add("@OF",SqlDbType.Int).Value=model.SolicitudProduccionID!.Value;
+                decimal entregadaPurga;
+                await using (var rd = await presupuesto.ExecuteReaderAsync(cancellationToken))
+                {
+                    if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("La OF de la purga no está activa.");
+                    await rd.NextResultAsync(cancellationToken); await rd.ReadAsync(cancellationToken);
+                    entregadaPurga=Convert.ToDecimal(rd[0]);
+                }
+                if (entregadaPurga+model.CantidadPurga>2m)
+                {
+                    ModelState.AddModelError(nameof(model.CantidadPurga), $"Ya se entregaron {entregadaPurga:0.###} KG de purga para esta OF. Restan {Math.Max(0m,2m-entregadaPurga):0.###} KG.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(model,cancellationToken,materialSolicitadoID);
+                    PrepararVistaEntregaMP(model,materialSolicitadoID,codigoSolicitado);
+                    return View(model);
+                }
+            }
+
             if (model.EsEntregaOF
                 && mismoMaterial
-                && movimientos.Count == 1)
+                && movimientos.Count(x => !x.EsPurga) == 1)
             {
                 const string asignarTipoSql = @"
 IF OBJECT_ID(N'dbo.sp_AlmacenMP_AsignarTipoReserva', N'P') IS NOT NULL
@@ -1591,7 +1624,7 @@ END;";
                 asignarTipo.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
                     model.SolicitudProduccionID!.Value;
                 asignarTipo.Parameters.Add("@MaterialID", SqlDbType.Int).Value = materialSolicitadoID;
-                asignarTipo.Parameters.Add("@TipoMP", SqlDbType.NChar, 1).Value = movimientos[0].TipoMP;
+                asignarTipo.Parameters.Add("@TipoMP", SqlDbType.NChar, 1).Value = movimientos.First(x => !x.EsPurga).TipoMP;
                 asignarTipo.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
                 await asignarTipo.ExecuteNonQueryAsync(cancellationToken);
             }
@@ -1613,6 +1646,8 @@ WITH ReservaPropia AS
 )
 SELECT
     inventario.TipoMP,
+    inventario.Fisico AS FisicoReal,
+    inventario.Disponible AS LibreSinReserva,
     inventario.Disponible + ISNULL(reserva.CantidadReservada, 0) AS SaldoOperacion
 FROM dbo.vw_AlmacenMPInventario inventario
 LEFT JOIN ReservaPropia reserva
@@ -1626,6 +1661,8 @@ WHERE inventario.MaterialID = @MaterialID
                     ["M"] = 0m
                 };
 
+                var libres = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+                var fisicos = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
                 await using (var saldoCommand =
                     new SqlCommand(saldoSql, connection, transaction))
                 {
@@ -1648,6 +1685,28 @@ WHERE inventario.MaterialID = @MaterialID
                     {
                         saldos[Texto(saldoReader, "TipoMP")] =
                             DecimalValor(saldoReader, "SaldoOperacion");
+                        libres[Texto(saldoReader, "TipoMP")] = DecimalValor(saldoReader, "LibreSinReserva");
+                        fisicos[Texto(saldoReader, "TipoMP")] = DecimalValor(saldoReader, "FisicoReal");
+                    }
+                }
+
+                // Validar ambas salidas juntas y no usar reservas ajenas/pendientes para purga.
+                foreach (var grupo in movimientos.GroupBy(x => x.TipoMP))
+                {
+                    var saldoTipo = saldos.GetValueOrDefault(grupo.Key);
+                    var libreTipo = libres.GetValueOrDefault(grupo.Key);
+                    var normal = grupo.Where(x => !x.EsPurga).Sum(x => x.Cantidad);
+                    var extra = grupo.Where(x => x.EsPurga).Sum(x => x.Cantidad);
+                    var reservaPropia = Math.Max(0m,saldoTipo-libreTipo);
+                    var libreTrasEntrega = Math.Max(0m,libreTipo-Math.Max(0m,normal-reservaPropia));
+                    if (grupo.Sum(x => x.Cantidad)>saldoTipo+0.0005m || grupo.Sum(x=>x.Cantidad)>fisicos.GetValueOrDefault(grupo.Key)+0.0005m || extra>libreTrasEntrega+0.0005m)
+                    {
+                        ModelState.AddModelError(extra>0m ? nameof(model.CantidadPurga) : nameof(model.CantidadVirgen),
+                            $"Stock insuficiente: entrega y purga del tipo {grupo.Key} exceden la disponibilidad. Libre para purga tras la entrega: {libreTrasEntrega:0.###} KG.");
+                        await transaction.RollbackAsync(cancellationToken);
+                        await CargarMovimientoAsync(model,cancellationToken,materialSolicitadoID);
+                        PrepararVistaEntregaMP(model,materialSolicitadoID,codigoSolicitado);
+                        return View(model);
                     }
                 }
 
@@ -1705,7 +1764,9 @@ VALUES
             {
                 var observacionesGuardar = model.Observaciones ?? string.Empty;
 
-                if (model.EsEntregaOF)
+                if (movimiento.EsPurga)
+                    observacionesGuardar = $"[PURGA EXTRA - NO COMPUTA EN OF] Referencia {model.NumeroOF}. {observacionesGuardar}";
+                else if (model.EsEntregaOF)
                 {
                     var tipoTexto = movimiento.TipoMP == "V" ? "Virgen" : "Molido";
                     var encabezado = mismoMaterial
@@ -1737,7 +1798,7 @@ VALUES
 
                 insert.Parameters.Add("@MaterialID", SqlDbType.Int).Value = model.MaterialID;
                 insert.Parameters.Add("@MaterialSolicitadoID", SqlDbType.Int).Value =
-                    model.EsEntregaOF ? materialSolicitadoID : DBNull.Value;
+                    model.EsEntregaOF && !movimiento.EsPurga ? materialSolicitadoID : DBNull.Value;
                 insert.Parameters.Add("@Tipo", SqlDbType.NVarChar, 30).Value = model.TipoMovimiento;
                 insert.Parameters.Add("@TipoMP", SqlDbType.NVarChar, 20).Value = movimiento.TipoMP;
                 insert.Parameters.Add("@Lote", SqlDbType.NVarChar, 120).Value =
@@ -1754,7 +1815,7 @@ VALUES
                         : DBNull.Value;
 
                 insert.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value =
-                    string.IsNullOrWhiteSpace(model.NumeroOF)
+                    movimiento.EsPurga || string.IsNullOrWhiteSpace(model.NumeroOF)
                         ? DBNull.Value
                         : model.NumeroOF;
 
@@ -1777,14 +1838,25 @@ VALUES
                         ? DBNull.Value
                         : observacionesGuardar;
                 insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = movimiento.Referencia;
-                insert.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = model.SolicitudProduccionID.HasValue && model.SolicitudProduccionID.Value > 0 ? model.SolicitudProduccionID.Value : DBNull.Value;
-                insert.Parameters.Add("@RequiereValidacionProduccion", SqlDbType.Bit).Value = model.EsEntregaOF;
-                insert.Parameters.Add("@ValidadoProduccion", SqlDbType.Bit).Value = !model.EsEntregaOF;
+                insert.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = !movimiento.EsPurga && model.SolicitudProduccionID.HasValue && model.SolicitudProduccionID.Value > 0 ? model.SolicitudProduccionID.Value : DBNull.Value;
+                insert.Parameters.Add("@RequiereValidacionProduccion", SqlDbType.Bit).Value = model.EsEntregaOF && !movimiento.EsPurga;
+                insert.Parameters.Add("@ValidadoProduccion", SqlDbType.Bit).Value = !model.EsEntregaOF || movimiento.EsPurga;
                 var movimientoAlmacenID = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken) ?? 0L);
                 if (movimientoAlmacenID <= 0)
                     throw new InvalidOperationException("No fue posible obtener el movimiento de materia prima registrado.");
 
-                if (model.EsEntregaOF)
+                if (movimiento.EsPurga)
+                {
+                    await using var purga = new SqlCommand(@"
+INSERT dbo.NSQ_AlmacenMP_Purgas(MovimientoID,SolicitudProduccionID,CantidadKg,FechaEntrega,UsuarioID,Activo)
+VALUES(@Movimiento,@OF,@Kg,SYSDATETIME(),@Usuario,1);", connection, transaction);
+                    purga.Parameters.Add("@Movimiento",SqlDbType.Int).Value=checked((int)movimientoAlmacenID);
+                    purga.Parameters.Add("@OF",SqlDbType.Int).Value=model.SolicitudProduccionID!.Value;
+                    var kg=purga.Parameters.Add("@Kg",SqlDbType.Decimal);kg.Precision=18;kg.Scale=3;kg.Value=movimiento.Cantidad;
+                    purga.Parameters.Add("@Usuario",SqlDbType.Int).Value=(object?)UsuarioID ?? DBNull.Value;
+                    await purga.ExecuteNonQueryAsync(cancellationToken);
+                }
+                else if (model.EsEntregaOF)
                     await RegistrarRecepcionProduccionMPAsync(connection, transaction, movimientoAlmacenID, cancellationToken);
             }
 
@@ -1859,7 +1931,7 @@ END;";
         Mensaje(
             "success",
             model.EsEntregaOF
-                ? $"Entrega de materia prima registrada. Virgen: {model.CantidadVirgen:0.###} KG; Molido: {model.CantidadMolido:0.###} KG."
+                ? $"Entrega de materia prima registrada. Virgen: {model.CantidadVirgen:0.###} KG; Molido: {model.CantidadMolido:0.###} KG. Purga independiente: {model.CantidadPurga:0.###} KG."
                 : model.TipoMovimiento == "Entrada" && model.TipoMP == "V"
                     ? $"Entrada MP Virgen registrada con folio de compra {model.FolioCompra}."
                     : $"Movimiento de Almacen MP {(model.TipoMP == "V" ? "Virgen" : "Molido")} registrado correctamente.");

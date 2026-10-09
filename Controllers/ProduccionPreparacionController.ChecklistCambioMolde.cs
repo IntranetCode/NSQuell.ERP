@@ -97,6 +97,8 @@ namespace ERP.NSQuell.Controllers
                     var resultado = NormalizarResultadoChecklistCambioMolde(respuesta.Resultado);
                     var observaciones = string.IsNullOrWhiteSpace(respuesta.Observaciones) ? null : respuesta.Observaciones.Trim();
                     var valorCapturado = string.IsNullOrWhiteSpace(respuesta.ValorCapturado) ? null : respuesta.ValorCapturado.Trim();
+                    if (pregunta.AutomaticaPorRecepcionMP)
+                    { resultado="OK";observaciones=pregunta.EvidenciaRecepcionMP;valorCapturado=null; }
                     if (observaciones?.Length > 1000) throw new InvalidOperationException($"Las observaciones de la pregunta {pregunta.OrdenPregunta} no pueden superar 1000 caracteres.");
                     if (valorCapturado?.Length > 200) throw new InvalidOperationException($"El valor capturado de la pregunta {pregunta.OrdenPregunta} no puede superar 200 caracteres.");
                     if (!string.IsNullOrWhiteSpace(resultado) && resultado != ProduccionChecklistResultado.Ok && resultado != ProduccionChecklistResultado.Nok && resultado != ProduccionChecklistResultado.Na) throw new InvalidOperationException($"La respuesta de la pregunta {pregunta.OrdenPregunta} no es válida.");
@@ -213,6 +215,7 @@ WHERE c.ChecklistArranqueID=@ChecklistArranqueID
                     await tx.RollbackAsync();
                     return Json(new { ok = true, mensaje = "El checklist ya se encuentra completo.", checklist });
                 }
+                await ERP.NSQuell.Servicios.Produccion.ChecklistRecepcionMpService.AplicarAsync(checklist.ChecklistArranqueID,usuarioId,cn,tx);
                 if (checklist.TotalPreguntas <= 0) throw new InvalidOperationException("El formato GQ-F-PR01-03 no tiene preguntas activas configuradas.");
                 if (!checklist.PuedeFinalizar)
                 {
@@ -561,6 +564,7 @@ ORDER BY p.OrdenSeccion,p.OrdenPregunta,p.PreguntaID;";
             }
             vm.Secciones = vm.Secciones.OrderBy(x => x.OrdenSeccion).ToList();
             foreach (var seccion in vm.Secciones) seccion.Preguntas = seccion.Preguntas.OrderBy(x => x.OrdenPregunta).ThenBy(x => x.PreguntaID).ToList();
+            if (!vm.EstaCompleto) await ERP.NSQuell.Servicios.Produccion.ChecklistRecepcionMpService.DecorarAsync(vm.ChecklistArranqueID,vm.Secciones.SelectMany(x=>x.Preguntas),cn,tx);
             return vm;
         }
 

@@ -257,7 +257,11 @@ namespace ERP.NSQuell.Models
                 if (FechaInicioRealProduccion.HasValue)
                     return FechaInicioRealProduccion.Value;
 
-                return InicioProyectado ?? Inicio;
+                var inicio = InicioProyectado ?? Inicio;
+                // Una preparación interrumpida antes del horario previsto no conserva ocupación futura.
+                if (FechaLiberacionMaquina.HasValue && FechaFinRealProduccion.HasValue && FechaLiberacionMaquina.Value <= inicio)
+                    return FechaLiberacionMaquina.Value;
+                return inicio;
             }
         }
 
@@ -265,7 +269,7 @@ namespace ERP.NSQuell.Models
         {
             get
             {
-                if (FechaLiberacionMaquina.HasValue && FechaLiberacionMaquina.Value > InicioVisual)
+                if (FechaLiberacionMaquina.HasValue && FechaLiberacionMaquina.Value >= InicioVisual)
                     return FechaLiberacionMaquina.Value;
 
                 if (FechaFinRealProduccion.HasValue && FechaFinRealProduccion.Value > InicioVisual)

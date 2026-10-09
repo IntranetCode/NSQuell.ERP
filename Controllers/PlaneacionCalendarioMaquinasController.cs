@@ -1821,8 +1821,10 @@ WHERE pp.Activo=1
   (
       (
           inicioReal.FechaInicioRealOperativa IS NULL
-          AND pp.FechaInicioProgramada<@Fin
-          AND ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada))>@Inicio
+          AND CASE WHEN pe.FechaLiberacionMaquina IS NOT NULL AND pe.FechaLiberacionMaquina<=pp.FechaInicioProgramada
+                   THEN pe.FechaLiberacionMaquina ELSE pp.FechaInicioProgramada END<@Fin
+          AND COALESCE(pe.FechaLiberacionMaquina,pp.FechaFinReal,pe.FechaFinReal,
+                ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada)))>@Inicio
       )
       OR
       (

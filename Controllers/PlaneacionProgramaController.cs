@@ -177,8 +177,15 @@ OUTER APPLY
 )emb
 OUTER APPLY
 (
-    SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0) AS ProgramadoPendiente
+    SELECT ISNULL(SUM(CASE WHEN corte.ReferenciaID IS NOT NULL THEN ISNULL(pp.CantidadProducida,0)+ISNULL(pp.PiezasDesdePT,0) ELSE ISNULL(pp.CantidadProgramada,0) END),0) AS ProgramadoPendiente
     FROM dbo.Planeacion_ProgramaProduccion pp
+    LEFT JOIN
+    (
+        SELECT DISTINCT ReferenciaID
+        FROM dbo.Produccion_Eventos
+        WHERE TipoEvento=N'INTERRUPCION_OPERATIVA'
+          AND ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+    ) corte ON corte.ReferenciaID=pp.ProgramaProduccionID
     WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
       AND pp.Activo=1
       AND ISNULL(pp.EstatusID,1)<>99
@@ -967,8 +974,15 @@ LEFT JOIN dbo.ERP_ParteDatosTecnicos t
    AND t.Activo=1
 OUTER APPLY
 (
-    SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0) AS CantidadProgramadaAcumulada
+    SELECT ISNULL(SUM(CASE WHEN corte.ReferenciaID IS NOT NULL THEN ISNULL(pp.CantidadProducida,0)+ISNULL(pp.PiezasDesdePT,0) ELSE ISNULL(pp.CantidadProgramada,0) END),0) AS CantidadProgramadaAcumulada
     FROM dbo.Planeacion_ProgramaProduccion pp
+    LEFT JOIN
+    (
+        SELECT DISTINCT ReferenciaID
+        FROM dbo.Produccion_Eventos
+        WHERE TipoEvento=N'INTERRUPCION_OPERATIVA'
+          AND ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+    ) corte ON corte.ReferenciaID=pp.ProgramaProduccionID
     WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
       AND pp.Activo=1
       AND ISNULL(pp.EstatusID,1)<>99
@@ -1671,8 +1685,15 @@ OUTER APPLY
 OUTER APPLY(SELECT TOP(1)ISNULL(Disponible,0) AS Disponible FROM dbo.vw_AlmacenPTInventario WHERE ParteID=d.ParteID)pt
 OUTER APPLY(SELECT TOP(1)ISNULL(Disponible,0) AS Disponible FROM dbo.vw_AlmacenMPInventario WHERE MaterialID=t.MaterialID AND TipoMP=N'V' ORDER BY OrdenTipo)mp
 OUTER APPLY(SELECT TOP(1)ISNULL(Disponible,0) AS Disponible FROM dbo.vw_AlmacenEmbalajesInventario WHERE Codigo=t.EmbalajeCodigo)emb
-OUTER APPLY(SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0) AS ProgramadoPendiente
+OUTER APPLY(SELECT ISNULL(SUM(CASE WHEN corte.ReferenciaID IS NOT NULL THEN ISNULL(pp.CantidadProducida,0)+ISNULL(pp.PiezasDesdePT,0) ELSE ISNULL(pp.CantidadProgramada,0) END),0) AS ProgramadoPendiente
     FROM dbo.Planeacion_ProgramaProduccion pp
+    LEFT JOIN
+    (
+        SELECT DISTINCT ReferenciaID
+        FROM dbo.Produccion_Eventos
+        WHERE TipoEvento=N'INTERRUPCION_OPERATIVA'
+          AND ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+    ) corte ON corte.ReferenciaID=pp.ProgramaProduccionID
     WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
       AND pp.Activo=1
       AND ISNULL(pp.EstatusID,1)<>99)prog
@@ -2914,9 +2935,16 @@ INNER JOIN dbo.Planeacion_ReleaseDetalle destino
 OUTER APPLY
 (
     SELECT
-        ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0)
+        ISNULL(SUM(CASE WHEN corte.ReferenciaID IS NOT NULL THEN ISNULL(pp.CantidadProducida,0)+ISNULL(pp.PiezasDesdePT,0) ELSE ISNULL(pp.CantidadProgramada,0) END),0)
             AS CantidadComprometida
     FROM dbo.Planeacion_ProgramaProduccion pp
+    LEFT JOIN
+    (
+        SELECT DISTINCT ReferenciaID
+        FROM dbo.Produccion_Eventos
+        WHERE TipoEvento=N'INTERRUPCION_OPERATIVA'
+          AND ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+    ) corte ON corte.ReferenciaID=pp.ProgramaProduccionID
     WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
       AND pp.Activo=1
       AND ISNULL(pp.EstatusID,1)<>99
@@ -2924,12 +2952,25 @@ OUTER APPLY
 OUTER APPLY
 (
     SELECT
-        ISNULL(SUM(ISNULL(sd.CantidadPiezas,0)),0)
+        ISNULL(SUM(COALESCE(interrumpida.CantidadOK,sd.CantidadPiezas,0)),0)
             AS CantidadComprometida
     FROM dbo.SolicitudesProduccion s
     INNER JOIN dbo.SolicitudesProduccionDetalle sd
         ON sd.SolicitudProduccionID=s.SolicitudProduccionID
        AND sd.Activo=1
+    OUTER APPLY
+    (
+        SELECT SUM(ISNULL(pp.CantidadProducida,0)+ISNULL(pp.PiezasDesdePT,0)) AS CantidadOK
+        FROM dbo.Planeacion_ProgramaProduccion pp
+        INNER JOIN
+        (
+            SELECT DISTINCT ReferenciaID FROM dbo.Produccion_Eventos
+            WHERE TipoEvento=N'INTERRUPCION_OPERATIVA'
+              AND ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+        ) corte ON corte.ReferenciaID=pp.ProgramaProduccionID
+        WHERE pp.SolicitudProduccionDetalleID=sd.SolicitudProduccionDetalleID
+          AND pp.Activo=1
+    ) interrumpida
     WHERE s.Activo=1
       AND ISNULL(s.EstatusID,1)<>99
       AND
@@ -3100,9 +3141,16 @@ LEFT JOIN dbo.ERP_ParteDatosTecnicos dt
 OUTER APPLY
 (
     SELECT
-        ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0)
+        ISNULL(SUM(CASE WHEN corte.ReferenciaID IS NOT NULL THEN ISNULL(pp.CantidadProducida,0)+ISNULL(pp.PiezasDesdePT,0) ELSE ISNULL(pp.CantidadProgramada,0) END),0)
             AS CantidadComprometida
     FROM dbo.Planeacion_ProgramaProduccion pp
+    LEFT JOIN
+    (
+        SELECT DISTINCT ReferenciaID
+        FROM dbo.Produccion_Eventos
+        WHERE TipoEvento=N'INTERRUPCION_OPERATIVA'
+          AND ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+    ) corte ON corte.ReferenciaID=pp.ProgramaProduccionID
     WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
       AND pp.Activo=1
       AND ISNULL(pp.EstatusID,1)<>99
@@ -3110,12 +3158,25 @@ OUTER APPLY
 OUTER APPLY
 (
     SELECT
-        ISNULL(SUM(ISNULL(sd.CantidadPiezas,0)),0)
+        ISNULL(SUM(COALESCE(interrumpida.CantidadOK,sd.CantidadPiezas,0)),0)
             AS CantidadComprometida
     FROM dbo.SolicitudesProduccion s
     INNER JOIN dbo.SolicitudesProduccionDetalle sd
         ON sd.SolicitudProduccionID=s.SolicitudProduccionID
        AND sd.Activo=1
+    OUTER APPLY
+    (
+        SELECT SUM(ISNULL(pp.CantidadProducida,0)+ISNULL(pp.PiezasDesdePT,0)) AS CantidadOK
+        FROM dbo.Planeacion_ProgramaProduccion pp
+        INNER JOIN
+        (
+            SELECT DISTINCT ReferenciaID FROM dbo.Produccion_Eventos
+            WHERE TipoEvento=N'INTERRUPCION_OPERATIVA'
+              AND ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+        ) corte ON corte.ReferenciaID=pp.ProgramaProduccionID
+        WHERE pp.SolicitudProduccionDetalleID=sd.SolicitudProduccionDetalleID
+          AND pp.Activo=1
+    ) interrumpida
     WHERE s.Activo=1
       AND ISNULL(s.EstatusID,1)<>99
       AND
@@ -3776,14 +3837,34 @@ ORDER BY d.ReleaseDetalleID;";
     (
         SELECT
             ISNULL(
-                SUM(
-                    ISNULL(pp.CantidadProgramada,0)
-                    - ISNULL(pp.CantidadProducida,0)),
+                SUM(CASE
+                    WHEN devolucion.TieneInterrupcion=1
+                        THEN CASE WHEN corte.ReferenciaID IS NOT NULL THEN ISNULL(pp.CantidadProducida,0)+ISNULL(pp.PiezasDesdePT,0) ELSE ISNULL(pp.CantidadProgramada,0) END
+                    WHEN ISNULL(pp.EstatusID,1) NOT IN (5,9,99)
+                        THEN ISNULL(pp.CantidadProgramada,0)-ISNULL(pp.CantidadProducida,0)
+                    ELSE 0 END),
                 0) AS ProgramadoPendiente
         FROM dbo.Planeacion_ProgramaProduccion pp
+    LEFT JOIN
+    (
+        SELECT DISTINCT ReferenciaID
+        FROM dbo.Produccion_Eventos
+        WHERE TipoEvento=N'INTERRUPCION_OPERATIVA'
+          AND ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+    ) corte ON corte.ReferenciaID=pp.ProgramaProduccionID
+        CROSS JOIN
+        (
+            SELECT CONVERT(bit,CASE WHEN EXISTS
+            (
+                SELECT 1 FROM dbo.Planeacion_ProgramaProduccion historia
+                INNER JOIN dbo.Produccion_Eventos ev ON ev.ReferenciaID=historia.ProgramaProduccionID
+                WHERE historia.ReleaseDetalleID=@ReleaseDetalleID AND historia.Activo=1
+                  AND ev.TipoEvento=N'INTERRUPCION_OPERATIVA' AND ev.ReferenciaTabla=N'Planeacion_ProgramaProduccion'
+            ) THEN 1 ELSE 0 END) AS TieneInterrupcion
+        ) devolucion
         WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
           AND pp.Activo=1
-          AND ISNULL(pp.EstatusID,1) NOT IN (5,9,99)
+          AND ISNULL(pp.EstatusID,1) NOT IN (9,99)
     ) prog
     WHERE d.ReleaseDetalleID=@ReleaseDetalleID
       AND d.Activo=1

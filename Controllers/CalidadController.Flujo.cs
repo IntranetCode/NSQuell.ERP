@@ -697,6 +697,14 @@ ORDER BY
             if (inspeccion == null)
                 return NotFound();
 
+            var bloqueoOrdenTecnico = await ValidarOrdenTecnicoCalidadV13Async(inspeccion);
+            if (!string.IsNullOrWhiteSpace(bloqueoOrdenTecnico))
+            {
+                TempData["Error"] = bloqueoOrdenTecnico;
+                return RedirectToAction(nameof(Detalle), new { id = inspeccion.InspeccionID });
+            }
+
+
             if (!CalidadEstados
                 .PuedeAutorizarPrearranque(
                     inspeccion.Estado))
@@ -1192,6 +1200,14 @@ WHERE ChecklistArranqueID = @ChecklistArranqueID
 
             if (inspeccion == null)
                 return NotFound();
+
+            var bloqueoOrdenTecnico = await ValidarOrdenTecnicoCalidadV13Async(inspeccion);
+            if (!string.IsNullOrWhiteSpace(bloqueoOrdenTecnico))
+            {
+                TempData["Error"] = bloqueoOrdenTecnico;
+                return RedirectToAction(nameof(Detalle), new { id = inspeccion.InspeccionID });
+            }
+
 
             if (!CalidadEstados
                 .PuedeAutorizarPrearranque(

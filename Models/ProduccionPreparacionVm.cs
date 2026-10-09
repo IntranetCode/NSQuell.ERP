@@ -512,6 +512,8 @@ namespace ERP.NSQuell.Models
 
     public sealed class ProduccionChecklistPreguntaVm
     {
+        public bool AutomaticaPorRecepcionMP { get; set; }
+        public string? EvidenciaRecepcionMP { get; set; }
         public int? ChecklistArranqueDetalleID { get; set; }
         public int ChecklistArranqueID { get; set; }
         public int PreguntaID { get; set; }

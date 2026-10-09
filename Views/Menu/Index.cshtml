@@ -3,7 +3,7 @@
 @using ERP.NSQuell.Areas.AdminUsuarios.Interfaces
 
 @{
-    Layout = null;
+    Layout = "_Layout"; // NSQ_MENU_LAYOUT_COMPARTIDO_V1_0
     ViewData["Title"] = "NS Quell - ERP";
 
     var nombreUsuario = Context.Session.GetString("NombreMostrar") ?? Context.Session.GetString("Username") ?? "Invitado";
@@ -28,145 +28,12 @@
     var inicialUsuario = !string.IsNullOrWhiteSpace(nombreUsuario) ? nombreUsuario.Trim().Substring(0, 1).ToUpper() : "U";
 }
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8" />
-    <title>NS Quell - ERP</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+@section Styles {
     <link rel="stylesheet" href="~/css/overlay.css" asp-append-version="true" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
-
-    <script>
-        (function () {
-            const savedTheme = localStorage.getItem('nsq-theme') || 'dark';
-            const theme = savedTheme === 'light' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-nsq-theme', theme);
-        })();
-    </script>
-
-    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<style id="NSQ_MENU_INDEX_NAVBAR_PARITY_FINAL_V9">
-    /* Menu/Index NO redefine el componente; solo vence overrides historicos locales. */
-    html[data-nsq-theme="light"] body #notifDropdown.notif-dropdown {
-        background: rgba(255,255,255,.98) !important;
-        border-color: rgba(41,67,95,.14) !important;
-        box-shadow: 0 24px 60px rgba(41,67,95,.18) !important;
-    }
-
-    html[data-nsq-theme="light"] body #notifDropdown .notif-header,
-    html[data-nsq-theme="light"] body #notifDropdown .notif-title {
-        color: #0d1929 !important;
-    }
-
-    html[data-nsq-theme="light"] body #notifDropdown .notif-item,
-    html[data-nsq-theme="light"] body #notifDropdown .notif-empty,
-    html[data-nsq-theme="light"] body #notifDropdown .notif-error {
-        color: #2c3e55 !important;
-    }
-
-    html[data-nsq-theme="light"] body #notifDropdown .notif-date,
-    html[data-nsq-theme="light"] body #notifDropdown .notif-msg {
-        color: #64748b !important;
-    }
-
-    html[data-nsq-theme="light"] body #notifDropdown .notif-actions a {
-        color: #f47b20 !important;
-    }
-
-    html[data-nsq-theme="dark"] body #notifDropdown.notif-dropdown {
-        background: rgba(15,23,42,.98) !important;
-        border-color: rgba(255,255,255,.13) !important;
-        box-shadow: 0 24px 60px rgba(0,0,0,.40) !important;
-    }
-
-    html[data-nsq-theme="dark"] body #notifDropdown .notif-header,
-    html[data-nsq-theme="dark"] body #notifDropdown .notif-title {
-        color: #ffffff !important;
-    }
-
-    html[data-nsq-theme="dark"] body #notifDropdown .notif-item,
-    html[data-nsq-theme="dark"] body #notifDropdown .notif-empty,
-    html[data-nsq-theme="dark"] body #notifDropdown .notif-error {
-        color: #cbd5e1 !important;
-    }
-
-    html[data-nsq-theme="dark"] body #notifDropdown .notif-date,
-    html[data-nsq-theme="dark"] body #notifDropdown .notif-msg {
-        color: #94a3b8 !important;
-    }
-
-    html[data-nsq-theme="dark"] body #notifDropdown .notif-actions a {
-        color: #ffb86b !important;
-    }
-</style>
-</head>
-
-<body class="nsq-menu-index-root-v1 " data-empresa="@empresaId">
-<script id="NSQ_MENU_THEME_PARITY_V7">
-(function () {
-    const root = document.documentElement;
-    const saved = localStorage.getItem('nsq-theme') || 'dark';
-    const theme = saved === 'light' ? 'light' : 'dark';
-
-    root.setAttribute('data-nsq-theme', theme);
-    root.setAttribute('data-bs-theme', theme);
-    root.style.colorScheme = theme;
-
-    document.body.classList.remove(
-        'nsq-theme-dark',
-        'nsq-theme-light',
-        'dark-mode',
-        'light-mode'
-    );
-
-    if (theme === 'light') {
-        document.body.classList.add('nsq-theme-light', 'light-mode');
-    } else {
-        document.body.classList.add('nsq-theme-dark', 'dark-mode');
-    }
-})();
-</script>
-    @await Html.PartialAsync("_Overlay")
-
-    <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
-
+    <style>.global-render-host > .main-wrapper { padding-top: 0; }</style>
+}
     <div class="main-wrapper">
-<!-- NSQ_MENU_INDEX_GLOBAL_V3_START -->
-        <div class="global-navbar-host nsq-menu-index-root-navbar">
-            @await Html.PartialAsync("_TopNavbar")
-        </div>
-<!-- NSQ_MENU_INDEX_GLOBAL_V3_END -->
-<!-- NSQ_NOTIFICACIONES_INTERNAS_V4_3_4: UN SOLO _TopNavbar; SIN JS LEGACY DE NOTIFICACIONES -->
-
-        @* NSQ_MENU_INDEX_LEGACY_NAV_DISABLED_V4_4 *@
-        @if (false)
-        {
-            @* NSQ_MENU_INDEX_LEGACY_TOPNAV_V2_REMOVED *@
-        }
-
-        <main class="main-content" id="main-content" role="main">
+        <div class="main-content" id="menu-dashboard-content">
             @{
                 var claseBienvenida = (ViewBag.MostrarBienvenida == true) ? "welcome-section as-overlay" : "welcome-section is-pinned";
             }
@@ -269,144 +136,17 @@
                     <span class="action-open">Abrir enlace</span>
                 </article>
             </section>
-        </main>
+        </div>
     </div>
 
     <!-- Modal de Perfil -->
-    <div class="modal fade" id="modalPerfil" tabindex="-1" aria-labelledby="modalPerfilLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content modal-perfil">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalPerfilLabel">
-                        <i class="fas fa-user-circle"></i>
-                        Mi Perfil
-                    </h5>
 
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="text-center mb-3">
-                        <i class="fas fa-user-circle fa-5x text-primary"></i>
-                    </div>
-
-                    <div class="perfil-info">
-                        <div class="mb-3">
-                            <label class="fw-bold"><i class="fas fa-user"></i> Nombre:</label>
-                            <p id="perfilNombre" class="ms-3"></p>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="fw-bold"><i class="fas fa-id-badge"></i> Usuario:</label>
-                            <p id="perfilUsername" class="ms-3"></p>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="fw-bold"><i class="fas fa-envelope"></i> Correo:</label>
-                            <p id="perfilCorreo" class="ms-3"></p>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="fw-bold"><i class="fas fa-phone"></i> Teléfono:</label>
-                            <p id="perfilTelefono" class="ms-3"></p>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="fw-bold"><i class="fas fa-user-tag"></i> Rol:</label>
-                            <p id="perfilRol" class="ms-3"></p>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="fw-bold"><i class="fas fa-info-circle"></i> Descripción del Rol:</label>
-                            <p id="perfilDescripcionRol" class="ms-3"></p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Modal de denuncia anónima -->
-    <div class="modal fade" id="modalDenunciaAnonima" tabindex="-1" role="dialog" aria-labelledby="modalDenunciaAnonimaLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg" role="document">
-            <div class="modal-content modal-denuncia">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalDenunciaAnonimaLabel">
-                        Denuncia anónima y confidencial
-                    </h5>
 
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
 
-                @using (Html.BeginForm("Crear", "DenunciasAnonimas", FormMethod.Post, new { id = "formDenunciaAnonima" }))
-                {
-                    @Html.AntiForgeryToken()
-
-                    <div class="modal-body">
-                        <p class="text-muted small">
-                            Tu identidad no se mostrará en ningún lado. La información se enviará de forma confidencial.
-                        </p>
-
-                        <div class="form-group">
-                            <label for="TipoDenuncia">Tipo de denuncia *</label>
-                            <select id="TipoDenuncia" name="TipoDenuncia" class="form-control" required>
-                                <option value="">-- Selecciona una opción --</option>
-                                <option value="Acoso">Acoso</option>
-                                <option value="Fraude">Fraude</option>
-                                <option value="Conducta inadecuada">Conducta inadecuada</option>
-                                <option value="Seguridad">Seguridad</option>
-                                <option value="Otros">Otros</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="DepartamentoAfectado">Departamento afectado *</label>
-                            <select id="DepartamentoAfectado" name="DepartamentoAfectado" class="form-control" required>
-                                <option value="">-- Selecciona una opción --</option>
-                                <option value="Recursos Humanos">Recursos Humanos</option>
-                                <option value="Ventas">Compras</option>
-                                <option value="Proyectos">Proyectos</option>
-                                <option value="Operaciones">Almacén</option>
-                                <option value="Finanzas">Finanzas</option>
-                                <option value="Otro">Otro</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="Descripcion">Descripción detallada *</label>
-                            <textarea id="Descripcion" name="Descripcion" class="form-control" rows="4" required></textarea>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="FechaHechos">Fecha aproximada de los hechos *</label>
-                            <input type="date" id="FechaHechos" name="FechaHechos" class="form-control" />
-                        </div>
-
-                        <div class="form-group">
-                            <label for="LugarHechos">Lugar de los hechos *</label>
-                            <input type="text" id="LugarHechos" name="LugarHechos" class="form-control" maxlength="200" />
-                        </div>
-
-                        <div class="form-group">
-                            <label for="camposObligatorios">* Todos los campos son obligatorios</label>
-                        </div>
-                    </div>
-
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Enviar denuncia</button>
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
-
+@section Scripts {
     <script src="~/js/overlay.js" asp-append-version="true"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 
     <script type="application/ld+json">
         {
@@ -489,29 +229,7 @@
         });
     </script>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const toggleBtn = document.getElementById('userToggle');
-            const dropdown = document.getElementById('userDropdownMenu');
 
-            if (!toggleBtn || !dropdown) return;
-
-            toggleBtn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                dropdown.classList.toggle('show');
-
-                const expanded = dropdown.classList.contains('show');
-                toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-            });
-
-            document.addEventListener('click', function (e) {
-                if (!dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
-                    dropdown.classList.remove('show');
-                    toggleBtn.setAttribute('aria-expanded', 'false');
-                }
-            });
-        });
-    </script>
 
 
 
@@ -525,44 +243,7 @@
 
     @Html.AntiForgeryToken()
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const linkMiPerfil = document.getElementById('linkMiPerfil');
 
-            if (linkMiPerfil) {
-                linkMiPerfil.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    cargarPerfil();
-                });
-            }
-
-            function cargarPerfil() {
-                fetch('/Perfil/ObtenerMiPerfil')
-                    .then(response => response.json())
-                    .then(result => {
-                        if (result.success) {
-                            const data = result.data;
-
-                            document.getElementById('perfilNombre').textContent = data.nombreUsuario || 'N/A';
-                            document.getElementById('perfilUsername').textContent = data.username || 'N/A';
-                            document.getElementById('perfilCorreo').textContent = data.correo || 'N/A';
-                            document.getElementById('perfilTelefono').textContent = data.telefono || 'N/A';
-                            document.getElementById('perfilRol').textContent = data.nombreRol || 'N/A';
-                            document.getElementById('perfilDescripcionRol').textContent = data.descripcionRol || 'N/A';
-
-                            const modal = new bootstrap.Modal(document.getElementById('modalPerfil'));
-                            modal.show();
-                        } else {
-                            alert('Error: ' + result.message);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        alert('Error al cargar el perfil');
-                    });
-            }
-        });
-    </script>
 
 
 
@@ -608,8 +289,7 @@
     window.addEventListener('nsq:themechange', syncRootTheme);
 })();
 </script>
-</body>
-</html>
+}
 
 @functions {
     private string GetCssClassForMenu(string menuNombre)

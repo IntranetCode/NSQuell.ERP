@@ -872,17 +872,21 @@
                         </div>
                         <div class="pcc-answer">
                             <input type="hidden" data-pcc-question-id value="@pregunta.PreguntaID" />
+                            @if (pregunta.AutomaticaPorRecepcionMP)
+                            {
+                                <div class="alert alert-success py-1 small"><i class="bi bi-lock-fill"></i> @pregunta.EvidenciaRecepcionMP</div>
+                            }
                             <div class="pcc-options">
                                 <div class="pcc-option ok">
-                                    <input type="radio" id="pcc_ok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" name="pcc_resultado_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" value="OK" @(resultado == "OK" ? "checked" : null) @(!puedeEditar ? "disabled" : null) />
+                                    <input type="radio" id="pcc_ok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" name="pcc_resultado_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" value="OK" @(resultado == "OK" ? "checked" : null) @(!puedeEditar || pregunta.AutomaticaPorRecepcionMP ? "disabled" : null) />
                                     <label for="pcc_ok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)"><i class="bi bi-check-circle"></i>OK</label>
                                 </div>
                                 <div class="pcc-option nok">
-                                    <input type="radio" id="pcc_nok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" name="pcc_resultado_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" value="NOK" @(resultado == "NOK" ? "checked" : null) @(!puedeEditar ? "disabled" : null) />
+                                    <input type="radio" id="pcc_nok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" name="pcc_resultado_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" value="NOK" @(resultado == "NOK" ? "checked" : null) @(!puedeEditar || pregunta.AutomaticaPorRecepcionMP ? "disabled" : null) />
                                     <label for="pcc_nok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)"><i class="bi bi-x-circle"></i>NOK</label>
                                 </div>
                                 <div class="pcc-option">
-                                    <input type="radio" id="pcc_na_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" name="pcc_resultado_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" value="NA" @(resultado == "NA" ? "checked" : null) @(!pregunta.PermiteNA || !puedeEditar ? "disabled" : null) />
+                                    <input type="radio" id="pcc_na_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" name="pcc_resultado_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" value="NA" @(resultado == "NA" ? "checked" : null) @(!pregunta.PermiteNA || !puedeEditar || pregunta.AutomaticaPorRecepcionMP ? "disabled" : null) />
                                     <label for="pcc_na_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)"><i class="bi bi-dash-circle"></i>N/A</label>
                                 </div>
                             </div>

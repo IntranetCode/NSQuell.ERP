@@ -121,6 +121,9 @@ builder.Services.AddSingleton<ICorreoErpBackgroundQueue, CorreoErpBackgroundQueu
 builder.Services.AddHostedService<CorreoErpBackgroundWorker>();
 builder.Services.AddScoped<ProduccionBloqueoCorreoService>();
 builder.Services.AddHostedService<ProduccionBloqueoCorreoHostedService>();
+// NSQ_ALERTAS_STOCK_MP_V1_0
+builder.Services.AddScoped<AlmacenStockAlertaService>();
+builder.Services.AddHostedService<AlmacenStockAlertaWorker>();
 
 // NSQ_NOTIFICACIONES_DEPARTAMENTALES_V1_1
 // Todo POST/PUT/PATCH/DELETE exitoso de un módulo departamental

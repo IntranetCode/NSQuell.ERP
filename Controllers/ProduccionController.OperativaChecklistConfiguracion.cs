@@ -49,7 +49,9 @@ public sealed partial class ProduccionController
         await CargarEstadoCalidadChecklistAsync(checklist, cn);
 
         var puedeGestionar = await UsuarioPuedeGestionarChecklistArranqueAsync(usuarioId, cn);
-        var puedeEditar = puedeGestionar && ProduccionChecklistEstatus.PuedeEditarProduccion(checklist.EstatusID);
+        var bloqueoConfiguracion = await ValidarConfiguracionAntesChecklistV13Async(ejecucionProduccionId, cn);
+        var puedeEditar = puedeGestionar && string.IsNullOrWhiteSpace(bloqueoConfiguracion) && ProduccionChecklistEstatus.PuedeEditarProduccion(checklist.EstatusID);
+        ViewData["BloqueoConfiguracionChecklistOperativa"] = bloqueoConfiguracion;
 
         ViewData["PuedeGestionarChecklistArranqueOperativa"] = puedeGestionar;
         ViewData["PuedeEditarChecklistArranqueOperativa"] = puedeEditar;
@@ -100,18 +102,6 @@ public sealed partial class ProduccionController
         if (contexto == null)
             return NotFound(new { ok = false, mensaje = "No se encontró la ejecución de Producción." });
 
-        var checklist = await ObtenerChecklistArranquePorEjecucionAsync(ejecucionProduccionId, cn);
-        if (checklist == null)
-            return StatusCode(StatusCodes.Status409Conflict, new { ok = false, mensaje = "Primero debes completar el checklist de arranque GQ-F-PR01-06." });
-
-        await CargarEstadoCalidadChecklistAsync(checklist, cn);
-        if (checklist.EstatusID == ProduccionChecklistEstatus.RechazadoRequiereAjuste)
-            return StatusCode(StatusCodes.Status409Conflict, new { ok = false, esperandoCalidad = false, mensaje = "Calidad devolvió el checklist. Corrige el GQ-F-PR01-06 antes de continuar con la configuración técnica." });
-
-        if (checklist.EstatusID != ProduccionChecklistEstatus.PendienteValidacionCalidad &&
-            checklist.EstatusID != ProduccionChecklistEstatus.ValidadoPorCalidad)
-            return StatusCode(StatusCodes.Status409Conflict, new { ok = false, esperandoCalidad = false, mensaje = "Completa el checklist de Producción antes de confirmar la configuración técnica." });
-
         var vm = await ConstruirConfiguracionTecnicoAsync(contexto, cn);
         var permisos = await ObtenerPermisosProduccionUsuarioAsync(ObtenerUsuarioID(), cn);
         var puedeModificar = PuedeModificarConfiguracionCorrida(permisos, contexto) && EjecucionPermiteConfiguracionCorrida(contexto);
@@ -134,10 +124,6 @@ public sealed partial class ProduccionController
     {
         if (!UsuarioEnSesion())
             return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
-
-        var validacionChecklist = await ValidarChecklistParaConfiguracionOperativaAsync(vm.EjecucionProduccionID);
-        if (!validacionChecklist.Permitido)
-            return StatusCode(StatusCodes.Status409Conflict, new { ok = false, esperandoCalidad = validacionChecklist.EsperandoCalidad, mensaje = validacionChecklist.Mensaje });
 
         LimpiarTempDataOperativaTecnica();
 
@@ -163,10 +149,6 @@ public sealed partial class ProduccionController
         if (!UsuarioEnSesion())
             return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
 
-        var validacionChecklist = await ValidarChecklistParaConfiguracionOperativaAsync(vm.EjecucionProduccionID);
-        if (!validacionChecklist.Permitido)
-            return StatusCode(StatusCodes.Status409Conflict, new { ok = false, esperandoCalidad = validacionChecklist.EsperandoCalidad, mensaje = validacionChecklist.Mensaje });
-
         LimpiarTempDataOperativaTecnica();
 
         IActionResult resultado;
@@ -185,32 +167,35 @@ public sealed partial class ProduccionController
     }
 
 
-    private async Task<(bool Permitido, bool EsperandoCalidad, string Mensaje)> ValidarChecklistParaConfiguracionOperativaAsync(int ejecucionProduccionId)
+    // NSQ_ORDEN_TECNICO_V1_3: configuración técnica → checklist de Producción → Calidad.
+    private async Task<string?> ValidarConfiguracionAntesChecklistV13Async(int ejecucionId, SqlConnection cn, SqlTransaction? tx = null)
     {
-        if (ejecucionProduccionId <= 0)
-            return (false, false, "La ejecución de Producción no es válida.");
+        var contexto = await ObtenerContextoConfiguracionCorridaAsync(ejecucionId, cn, tx);
+        if (contexto == null || !EjecucionPermiteConfiguracionCorrida(contexto))
+            return "No existe una ejecución activa para capturar el checklist de arranque.";
+        if (!await TieneConfiguracionParaChecklistV13Async(ejecucionId, cn, tx))
+            return "Primero confirma la configuración técnica: cavidades reales, tiempo de ciclo y contador base. Después se habilitará el checklist de arranque.";
+        var pareja = await ObtenerParejaLhRhProduccionAsync(contexto.ProgramaProduccionID, cn, tx);
+        if (pareja != null)
+        {
+            if (!pareja.TieneEjecucionPareja || !pareja.EsCompatibleFisicamente)
+                return "Corrige la pareja LH/RH antes de capturar el checklist de arranque.";
+            if (!await TieneConfiguracionParaChecklistV13Async(pareja.EjecucionParejaID!.Value, cn, tx))
+                return "Primero confirma la configuración técnica de ambas OF LH/RH. Después se habilitará el checklist de arranque.";
+        }
+        return null;
+    }
 
-        await using var cn = new SqlConnection(ConnectionString);
-        await cn.OpenAsync();
-
-        var checklist = await ObtenerChecklistArranquePorEjecucionAsync(ejecucionProduccionId, cn);
-        if (checklist == null)
-            return (false, false, "Primero debes completar el checklist de arranque GQ-F-PR01-06.");
-
-        await CargarEstadoCalidadChecklistAsync(checklist, cn);
-
-        if (checklist.EstatusID == ProduccionChecklistEstatus.ValidadoPorCalidad)
-            return (true, false, string.Empty);
-
-        // NSQ_ORDEN_CONFIG_CALIDAD_V1_0: la configuración técnica se captura antes
-        // de la decisión de Calidad. El checklist ya enviado a Calidad es suficiente.
-        if (checklist.EstatusID == ProduccionChecklistEstatus.PendienteValidacionCalidad)
-            return (true, true, string.Empty);
-
-        if (checklist.EstatusID == ProduccionChecklistEstatus.RechazadoRequiereAjuste)
-            return (false, false, "Calidad devolvió el checklist. Corrige el GQ-F-PR01-06 antes de continuar con la configuración técnica.");
-
-        return (false, false, "Completa y envía el checklist GQ-F-PR01-06 a Calidad antes de continuar con la configuración técnica.");
+    private static async Task<bool> TieneConfiguracionParaChecklistV13Async(int ejecucionId, SqlConnection cn, SqlTransaction? tx)
+    {
+        const string sql = @"
+SELECT COUNT(1)
+FROM dbo.Produccion_ConfiguracionCorrida WITH(UPDLOCK,HOLDLOCK)
+WHERE EjecucionProduccionID=@EjecucionID AND Activo=1 AND FechaFinVigencia IS NULL
+  AND CavidadesUsadas>0 AND TiempoCicloSegundos>0 AND ContadorInicioVigencia IS NOT NULL;";
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@EjecucionID", SqlDbType.Int).Value = ejecucionId;
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync()) == 1;
     }
 
     private IActionResult ConvertirResultadoOperativaTecnica(IActionResult resultado, string mensajePredeterminado, bool esperandoCalidad = false)

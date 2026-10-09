@@ -27,18 +27,23 @@ namespace ERP.NSQuell.Servicios.Produccion
             string motivo,
             int usuarioId,
             SqlConnection cn,
-            SqlTransaction tx)
+            SqlTransaction tx,
+            bool interrupcionOperativa = false,
+            DateTime? fechaCorte = null)
         {
             if (ejecucionProduccionId <= 0)
                 throw new InvalidOperationException("No se recibió una ejecución válida.");
 
             motivo = motivo?.Trim() ?? string.Empty;
 
-            if (motivo.Length < 10)
+            if (motivo.Length < (interrupcionOperativa ? 1 : 10))
                 throw new InvalidOperationException("La finalización anticipada requiere una justificación de al menos 10 caracteres.");
 
             if (motivo.Length > 500)
+            {
+                if (interrupcionOperativa) throw new InvalidOperationException("La justificación admite hasta 500 caracteres.");
                 motivo = motivo[..500];
+            }
 
             if (usuarioId <= 0)
                 throw new InvalidOperationException("No se pudo identificar al usuario que realiza el cierre.");
@@ -47,7 +52,7 @@ namespace ERP.NSQuell.Servicios.Produccion
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
-DECLARE @Ahora DATETIME2 = SYSDATETIME();
+DECLARE @Ahora DATETIME2 = COALESCE(@FechaCorte,SYSDATETIME());
 DECLARE @ProgramaProduccionID INT;
 DECLARE @EstatusID INT;
 DECLARE @FechaInicioReal DATETIME2;
@@ -73,7 +78,7 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
 IF @ProgramaProduccionID IS NULL
     THROW 51501,'No se encontró la ejecución activa de Producción.',1;
 
-IF @FechaInicioReal IS NULL
+IF @FechaInicioReal IS NULL AND @InterrupcionOperativa=0
     THROW 51502,'La producción todavía no ha iniciado físicamente. Utilice el flujo de cancelación/reprogramación correspondiente.',1;
 
 IF @EstatusID NOT IN (@EnPreparacion,@EnProduccion,@Pausado)
@@ -98,7 +103,7 @@ UPDATE dbo.Produccion_Paros
 SET FechaFinParo=@Ahora,
     DuracionMinutos=CASE WHEN FechaInicioParo IS NULL THEN ISNULL(DuracionMinutos,0) ELSE DATEDIFF(MINUTE,FechaInicioParo,@Ahora) END,
     EsMayorA15Minutos=CASE WHEN FechaInicioParo IS NOT NULL AND DATEDIFF(MINUTE,FechaInicioParo,@Ahora)>15 THEN 1 ELSE ISNULL(EsMayorA15Minutos,0) END,
-    Descripcion=RIGHT(CONCAT(ISNULL(Descripcion,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Descripcion,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,@Nota),1000),
+    Descripcion=CASE WHEN @InterrupcionOperativa=1 THEN Descripcion ELSE RIGHT(CONCAT(ISNULL(Descripcion,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Descripcion,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,@Nota),1000) END,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=@Ahora
 WHERE EjecucionProduccionID=@EjecucionProduccionID
@@ -122,8 +127,11 @@ SET CantidadOKTotal=@CantidadOK,
     CantidadSospechosaTotal=@CantidadSospechosa,
     CantidadScrapTotal=@CantidadScrap,
     FechaFinReal=@Ahora,
+    FechaLiberacionMaquina=CASE WHEN @InterrupcionOperativa=1 THEN COALESCE(FechaLiberacionMaquina,@Ahora) ELSE FechaLiberacionMaquina END,
+    UsuarioLiberacionMaquinaID=CASE WHEN @InterrupcionOperativa=1 AND FechaLiberacionMaquina IS NULL THEN @UsuarioID ELSE UsuarioLiberacionMaquinaID END,
+    ObservacionesLiberacionMaquina=CASE WHEN @InterrupcionOperativa=1 AND FechaLiberacionMaquina IS NULL THEN @Motivo ELSE ObservacionesLiberacionMaquina END,
     EstatusID=@TerminadoParcial,
-    Observaciones=RIGHT(CONCAT(ISNULL(Observaciones,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,@Nota),1000),
+    Observaciones=CASE WHEN @InterrupcionOperativa=1 THEN Observaciones ELSE RIGHT(CONCAT(ISNULL(Observaciones,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,@Nota),1000) END,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=@Ahora
 WHERE EjecucionProduccionID=@EjecucionProduccionID
@@ -134,6 +142,7 @@ IF @@ROWCOUNT<>1
 
 UPDATE dbo.Planeacion_ProgramaProduccion
 SET EstatusID=@ProgramaTerminado,
+    CantidadProducida=CASE WHEN @InterrupcionOperativa=1 THEN @CantidadOK ELSE CantidadProducida END,
     FechaFinReal=@Ahora,
     HorasReales=CASE WHEN FechaInicioReal IS NOT NULL THEN CONVERT(DECIMAL(18,2),DATEDIFF(MINUTE,FechaInicioReal,@Ahora)/60.0) ELSE HorasReales END,
     UsuarioModificacionID=@UsuarioID,
@@ -153,7 +162,7 @@ IF @InspeccionID IS NOT NULL
 BEGIN
     UPDATE dbo.Calidad_MonitoreosProceso
     SET Activo=0,
-        Observaciones=RIGHT(CONCAT(ISNULL(Observaciones,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,N'Cancelado: la producción finalizó anticipadamente y esta revisión futura ya no corresponde.'),1000),
+        Observaciones=CASE WHEN @InterrupcionOperativa=1 THEN Observaciones ELSE RIGHT(CONCAT(ISNULL(Observaciones,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,N'Cancelado: la producción finalizó anticipadamente y esta revisión futura ya no corresponde.'),1000) END,
         UsuarioModificacionID=@UsuarioID,
         FechaModificacion=@Ahora
     WHERE InspeccionID=@InspeccionID
@@ -166,7 +175,7 @@ BEGIN
     UPDATE dbo.Calidad_Reliberaciones
     SET Resultado=@ReliberacionCancelada,
         FechaValidacion=ISNULL(FechaValidacion,@Ahora),
-        Observaciones=RIGHT(CONCAT(ISNULL(Observaciones,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,N'Reliberación cancelada porque la producción finalizó anticipadamente. No autoriza reinicio. Motivo: ',@Motivo),1000),
+        Observaciones=CASE WHEN @InterrupcionOperativa=1 THEN Observaciones ELSE RIGHT(CONCAT(ISNULL(Observaciones,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,N'Reliberación cancelada porque la producción finalizó anticipadamente. No autoriza reinicio. Motivo: ',@Motivo),1000) END,
         UsuarioModificacionID=@UsuarioID,
         FechaModificacion=@Ahora
     WHERE InspeccionID=@InspeccionID
@@ -180,7 +189,7 @@ BEGIN
         ConfiguracionInvalidada=0,
         Liberado=0,
         Estado=@CalidadPendienteCaja,
-        Observaciones=RIGHT(CONCAT(ISNULL(Observaciones,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,@Nota),1000),
+        Observaciones=CASE WHEN @InterrupcionOperativa=1 THEN Observaciones ELSE RIGHT(CONCAT(ISNULL(Observaciones,N''),CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN N'' ELSE CHAR(13)+CHAR(10) END,@Nota),1000) END,
         UsuarioModificacionID=@UsuarioID,
         FechaModificacion=@Ahora
     WHERE InspeccionID=@InspeccionID
@@ -204,6 +213,8 @@ SELECT
     @InspeccionID AS InspeccionID;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@InterrupcionOperativa", SqlDbType.Bit).Value = interrupcionOperativa;
+            cmd.Parameters.Add("@FechaCorte", SqlDbType.DateTime2).Value = (object?)fechaCorte ?? DBNull.Value;
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
             cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500).Value = motivo;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;

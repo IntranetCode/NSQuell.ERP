@@ -17,6 +17,7 @@
             "PAUSADO" => "is-warning",
             "BLOQUEADA" => "is-danger",
             "INTERRUMPIDA_URGENTE" => "is-danger",
+            "MAQUINA_LIBERADA" => "is-done",
             "TERMINADA" => "is-done",
             "CERRADA" => "is-done",
             _ => "is-neutral"
@@ -171,8 +172,8 @@
     var clavesArranque = new[]
     {
         "INICIAR_PREPARACION",
-        AgendaOperativaPasoClave.ChecklistArranque,
-        AgendaOperativaPasoClave.ConfiguracionCorrida
+        AgendaOperativaPasoClave.ConfiguracionCorrida,
+        AgendaOperativaPasoClave.ChecklistArranque
     };
     var clavesCalidadArranque = new[]
     {
@@ -354,6 +355,9 @@
         justify-content: flex-end
     }
 
+    .nsq-op-subtitle .nsq-op-part-info { flex-wrap: wrap; }
+    .nsq-op-part-designacion { color: #fff; font-weight: 800; overflow-wrap: anywhere; }
+
     .nsq-op-icon-btn {
         width: 36px;
         height: 36px;
@@ -373,6 +377,8 @@
             color: #fff;
             transform: translateY(-1px)
         }
+
+    .nsq-op-icon-btn.is-labelled { width: auto; min-width: 36px; padding: 0 10px; gap: 6px; font-size: .92rem; white-space: nowrap; }
 
     .nsq-op-badges {
         display: flex;
@@ -452,6 +458,28 @@
         background: #fff;
         color: var(--op-muted);
     }
+
+        button.nsq-op-stage {
+            width: 100%;
+            display: block;
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .nsq-op-stage:hover,
+        .nsq-op-stage.is-selected {
+            border-color: #9fc2f5;
+            box-shadow: 0 0 0 2px rgba(0,74,173,.07);
+        }
+
+        .nsq-op-stage:focus-visible,
+        .nsq-op-flow-phase:focus-visible {
+            outline: 2px solid var(--op-primary);
+            outline-offset: 3px;
+        }
+
+        .nsq-op-stage > .nsq-op-stage-progress { display: block; }
 
         .nsq-op-stage.is-current {
             border-color: #9fc2f5;
@@ -1487,7 +1515,9 @@
                 </div>
                 <div class="nsq-op-subtitle">
                     <span><i class="bi bi-gear-wide-connected"></i>@Model.MaquinaTexto</span>
-                    <span><i class="bi bi-box"></i>@Model.ParteTexto</span>
+                    <span class="nsq-op-part-info"><i class="bi bi-box"></i>@Model.ParteTexto
+                        <strong class="nsq-op-part-designacion">· @(string.IsNullOrWhiteSpace(Model.DescripcionParte) ? "Sin designación registrada" : Model.DescripcionParte.Trim())</strong>
+                    </span>
                     @if (!string.IsNullOrWhiteSpace(Model.ClienteNombre))
                     {
                         <span><i class="bi bi-building"></i>@Model.ClienteNombre</span>
@@ -1500,6 +1530,14 @@
             </div>
 
             <div class="nsq-op-header-actions">
+                @if (Model.EjecucionProduccionID.HasValue && Model.Permisos.PuedeTerminarProduccion && !Model.Permisos.SoloLectura)
+                {
+                    <a href="@Url.Action("CierreOperativo", "Produccion", new { programaProduccionId = Model.ProgramaProduccionID, soloLectura = false, enfoque = "CIERRE" })"
+                       class="nsq-op-icon-btn is-labelled" title="Finalizar producción" aria-label="Finalizar producción"
+                       data-nsq-operativa-accion data-accion-clave="CIERRE" data-accion-titulo="Finalizar producción">
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i><span>Finalizar producción</span>
+                    </a>
+                }
                 <a href="@urlCentro"
                    class="nsq-op-icon-btn"
                    title="Actualizar"
@@ -1560,14 +1598,16 @@
                     var porcentajeFase = ProgresoClaves(pasos, fase.Claves);
                     var actualFase = accionActual != null && ContieneClave(fase.Claves, accionActual.Clave);
                     var pasadaFase = porcentajeFase >= 100m;
-                    <div class="nsq-op-stage @(actualFase ? "is-current" : pasadaFase ? "is-past" : "")">
-                        <div class="nsq-op-stage-head">
+                    <button type="button" class="nsq-op-stage @(actualFase ? "is-current" : pasadaFase ? "is-past" : "")"
+                            data-nsq-operativa-fase="@fase.Clave" aria-pressed="false"
+                            aria-controls="nsqOpFase_@(Model.ProgramaProduccionID)_@fase.Clave" title="Ir a @fase.Nombre">
+                        <span class="nsq-op-stage-head">
                             <i class="bi @fase.Icono"></i>
                             <span>@fase.Nombre</span>
                             <span class="ms-auto">@porcentajeFase.ToString("0")%</span>
-                        </div>
-                        <div class="nsq-op-stage-progress"><span style="width:@Pct(porcentajeFase)%"></span></div>
-                    </div>
+                        </span>
+                        <span class="nsq-op-stage-progress"><span style="width:@Pct(porcentajeFase)%"></span></span>
+                    </button>
                 }
             </div>
             <div class="nsq-op-route-note">
@@ -1871,7 +1911,9 @@
                                 var pasosFase = pasos.Where(x => ContieneClave(fase.Claves, x.Clave)).OrderBy(x => x.Orden).ToList();
                                 if (!pasosFase.Any()) continue;
                                 var faseParalela = string.Equals(fase.Clave, "MOLDE", StringComparison.OrdinalIgnoreCase);
-                                <div class="nsq-op-flow-phase @(faseParalela ? "is-parallel" : "")">
+                                <div id="nsqOpFase_@(Model.ProgramaProduccionID)_@fase.Clave"
+                                     data-nsq-operativa-fase-destino="@fase.Clave" tabindex="-1"
+                                     class="nsq-op-flow-phase @(faseParalela ? "is-parallel" : "")">
                                     <div class="nsq-op-flow-phase-head">
                                         <i class="bi @fase.Icono"></i>
                                         <span>@fase.Nombre</span>
@@ -2183,7 +2225,39 @@
             });
         }
 
+        // Las tarjetas de progreso navegan al bloque correspondiente del flujo.
+        function abrirFase(clave){
+            const destino=[...root.querySelectorAll('[data-nsq-operativa-fase-destino]')]
+                .find(x=>x.dataset.nsqOperativaFaseDestino===clave);
+            if(!destino) return;
+            root.querySelector('[data-nsq-operativa-resumen]')?.classList.remove('d-none');
+            actionView.classList.remove('is-active');
+            soloLecturaActiva=false;
+            root.dataset.nsqSoloLecturaActiva='false';
+            for(let nodo=destino.parentElement;nodo&&nodo!==root;nodo=nodo.parentElement){
+                if(nodo.tagName==='DETAILS') nodo.open=true;
+            }
+            root.querySelectorAll('[data-nsq-operativa-fase]').forEach(boton=>{
+                const seleccionado=boton.dataset.nsqOperativaFase===clave;
+                boton.classList.toggle('is-selected',seleccionado);
+                boton.setAttribute('aria-pressed',String(seleccionado));
+            });
+            window.requestAnimationFrame(()=>{
+                destino.focus({preventScroll:true});
+                if(scrollBody){
+                    const top=destino.getBoundingClientRect().top-scrollBody.getBoundingClientRect().top+scrollBody.scrollTop-12;
+                    scrollBody.scrollTo({top:Math.max(0,top),behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+                }
+            });
+        }
+
         root.addEventListener('click',event=>{
+            const fase=event.target.closest('[data-nsq-operativa-fase]');
+            if(fase&&root.contains(fase)){
+                event.preventDefault();
+                abrirFase(fase.dataset.nsqOperativaFase);
+                return;
+            }
             const link=event.target.closest('[data-nsq-operativa-accion]');
             if(link&&root.contains(link)){
                 soloLecturaActiva=String(link.getAttribute('data-solo-lectura')||'false').toLowerCase()==='true';
@@ -2455,73 +2529,33 @@
         });
     }
 
-    function isChecklistControl(el) {
-        if (!el) return false;
-        if (el.closest('.pcc-op')) return true;
-        if (el.closest('[data-checklist-root]')) return true;
-        if (el.closest('.checklist')) return true;
-        if (el.closest('.modal') && /(ok|nok|n\/?a)/i.test((el.textContent || '').trim())) return true;
-        return false;
-    }
-
+    // NSQ_MODAL_CHECKLIST_ESTABLE_V1_0
+    // Un observador de style que vuelve a escribir style provoca un ciclo de microtareas.
     function stabilizeModal(modal) {
         if (!modal) return;
         ensureClass(modal);
-
         var body = modal.querySelector('.modal-body');
         if (body) {
-            body.style.minHeight = '56vh';
-            body.style.overflowY = 'auto';
+            if (body.style.minHeight !== '56vh') body.style.minHeight = '56vh';
+            if (body.style.overflowY !== 'auto') body.style.overflowY = 'auto';
         }
-
-        if (window.bootstrap && typeof window.bootstrap.Modal !== 'undefined') {
-            var inst = window.bootstrap.Modal.getInstance(modal);
-            if (inst && typeof inst.handleUpdate === 'function') {
-                inst.handleUpdate();
-            }
-        }
+        var inst = window.bootstrap?.Modal?.getInstance(modal);
+        if (inst && typeof inst.handleUpdate === 'function') inst.handleUpdate();
     }
 
     function bindChecklistGuards(modal) {
         if (!modal || modal.__nsqChecklistGuardBound) return;
         modal.__nsqChecklistGuardBound = true;
-
-        modal.addEventListener('click', function (ev) {
-            var t = ev.target;
-            if (!isChecklistControl(t)) return;
-
-            var text = normalize(t.textContent || (t.value || ''));
-            if (text === 'na' || text === 'n/a' || text === 'ok' || text === 'nok') {
-                ev.stopPropagation();
-            }
-        }, true);
-
-        modal.addEventListener('change', function (ev) {
-            var t = ev.target;
-            if (!t) return;
-            if (!isChecklistControl(t)) return;
-
-            var val = normalize(t.value || t.getAttribute('data-value') || t.textContent || '');
-            if (val === 'na' || val === 'n/a' || val === 'ok' || val === 'nok') {
-                setTimeout(function () {
-                    stabilizeModal(modal);
-                }, 0);
-            }
-        }, true);
-
-        var body = modal.querySelector('.modal-body');
-        if (body && !body.__nsqObserved) {
-            body.__nsqObserved = true;
-            var observer = new MutationObserver(function () {
-                stabilizeModal(modal);
+        let programada = false;
+        modal.addEventListener('change', function (event) {
+            if (!event.target?.closest('.poc, .pcc-op, .checklist, [data-checklist-root]')) return;
+            if (programada) return;
+            programada = true;
+            requestAnimationFrame(function () {
+                programada = false;
+                if (modal.classList.contains('show')) stabilizeModal(modal);
             });
-            observer.observe(body, {
-                attributes: true,
-                childList: true,
-                subtree: true,
-                attributeFilter: ['style', 'class']
-            });
-        }
+        });
     }
 
     function apply() {
@@ -2534,9 +2568,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', apply);
-    document.addEventListener('click', function () { setTimeout(apply, 50); }, true);
     document.addEventListener('shown.bs.modal', function () { setTimeout(apply, 50); });
     setTimeout(apply, 300);
-    setInterval(apply, 2000);
 })();
 </script>

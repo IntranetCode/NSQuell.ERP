@@ -920,39 +920,211 @@ ORDER BY DistribucionID DESC;";
         });
     }
 
+    // NSQ_PRODUCCION_PERSONAL_SELECTOR_RH_REAL_V16_0
+    private sealed class HorarioSelectorRhV16
+    {
+        public DateTime Fecha { get; set; }
+        public int? EscalaID { get; set; }
+        public string Folio { get; set; } = string.Empty;
+        public string Estado { get; set; } = string.Empty;
+        public int? PersonaID { get; set; }
+        public string Turno { get; set; } = string.Empty;
+        public TimeSpan? Inicio { get; set; }
+        public TimeSpan? Fin { get; set; }
+        public bool Cruza { get; set; }
+        public bool Flexible { get; set; }
+    }
+
+    private static async Task<List<HorarioSelectorRhV16>> CargarHorariosSelectorRhV16Async(
+        DateTime desde, DateTime hasta, SqlConnection cn)
+    {
+        // Resolver una escala completa por fecha. Una persona sin asignacion en
+        // esa escala no debe heredar accidentalmente el horario de otra escala.
+        // Se conserva la precedencia actual: Publicada, luego Borrador.
+        const string sql = @"
+;WITH Fechas AS
+(
+    SELECT @Desde AS Fecha
+    UNION ALL
+    SELECT DATEADD(DAY,1,Fecha) FROM Fechas WHERE Fecha<@Hasta
+)
+SELECT
+    d.Fecha,
+    e.EscalaID,
+    e.Folio,
+    e.Estado,
+    a.PersonalID,
+    t.Nombre AS TurnoNombre,
+    t.HoraInicio,
+    t.HoraFin,
+    t.CruzaDiaSiguiente,
+    t.EsFlexible
+FROM Fechas d
+OUTER APPLY
+(
+    SELECT TOP(1) ep.EscalaID,ep.Folio,ep.Estado
+    FROM dbo.RRHH_EscalasPersonal ep
+    WHERE ep.Activo=1
+      AND ep.Estado IN(N'Publicada',N'Borrador')
+      AND ep.FechaInicio<=d.Fecha
+      AND ep.FechaFin>=d.Fecha
+    ORDER BY
+        CASE WHEN ep.Estado=N'Publicada' THEN 0 ELSE 1 END,
+        ISNULL(ep.FechaPublicacion,ep.FechaRegistro) DESC,
+        ep.EscalaID DESC
+) e
+LEFT JOIN dbo.RRHH_EscalaAsignaciones a
+    ON a.EscalaID=e.EscalaID
+   AND a.Activo=1
+   AND a.FechaInicio<=d.Fecha
+   AND a.FechaFin>=d.Fecha
+LEFT JOIN dbo.RRHH_EscalaTurnos t
+    ON t.EscalaTurnoID=a.EscalaTurnoID
+   AND t.EscalaID=a.EscalaID
+   AND t.Activo=1
+ORDER BY d.Fecha,a.PersonalID
+OPTION(MAXRECURSION 100);";
+
+        var result = new List<HorarioSelectorRhV16>();
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.Add("@Desde", SqlDbType.Date).Value = desde.Date;
+        cmd.Parameters.Add("@Hasta", SqlDbType.Date).Value = hasta.Date;
+        await using var rd = await cmd.ExecuteReaderAsync();
+        while (await rd.ReadAsync())
+        {
+            result.Add(new HorarioSelectorRhV16
+            {
+                Fecha = Convert.ToDateTime(rd["Fecha"]),
+                EscalaID = rd["EscalaID"] == DBNull.Value ? null : Convert.ToInt32(rd["EscalaID"]),
+                Folio = rd["Folio"]?.ToString()?.Trim() ?? string.Empty,
+                Estado = rd["Estado"]?.ToString()?.Trim() ?? string.Empty,
+                // Un turno inactivo o inexistente no representa un horario RH.
+                PersonaID = rd["PersonalID"] == DBNull.Value || rd["TurnoNombre"] == DBNull.Value
+                    ? null : Convert.ToInt32(rd["PersonalID"]),
+                Turno = rd["TurnoNombre"]?.ToString()?.Trim() ?? string.Empty,
+                Inicio = rd["HoraInicio"] == DBNull.Value ? null : (TimeSpan)rd["HoraInicio"],
+                Fin = rd["HoraFin"] == DBNull.Value ? null : (TimeSpan)rd["HoraFin"],
+                Cruza = rd["CruzaDiaSiguiente"] != DBNull.Value && Convert.ToBoolean(rd["CruzaDiaSiguiente"]),
+                Flexible = rd["EsFlexible"] != DBNull.Value && Convert.ToBoolean(rd["EsFlexible"])
+            });
+        }
+        return result;
+    }
+
+    private static bool CoincideHorarioSelectorRhV16(
+        HorarioSelectorRhV16 rh, DistribucionTurnoV13 turno)
+    {
+        // Comparar los horarios reales. TurnoOrigenID puede ser nulo o RH
+        // puede haber ajustado las horas de un turno dentro de la escala.
+        if (rh.Flexible || !rh.Inicio.HasValue || !rh.Fin.HasValue)
+            return false;
+        var cruzaRh = rh.Cruza || rh.Fin.Value <= rh.Inicio.Value;
+        var cruzaProduccion = turno.Cruza || turno.Fin <= turno.Inicio;
+        return rh.Inicio.Value == turno.Inicio && rh.Fin.Value == turno.Fin
+            && cruzaRh == cruzaProduccion;
+    }
+
+    private static string TextoHorarioSelectorRhV16(HorarioSelectorRhV16 rh)
+    {
+        if (rh.Flexible) return "Horario flexible";
+        if (!rh.Inicio.HasValue || !rh.Fin.HasValue) return "Horario RH sin horas definidas";
+        return rh.Inicio.Value.ToString(@"hh\:mm") + "–" + rh.Fin.Value.ToString(@"hh\:mm");
+    }
+
     [HttpGet("DistribucionV14/Candidatos")]
-    public async Task<IActionResult> CandidatosDistribucionV14(int? parteId)
+    public async Task<IActionResult> CandidatosDistribucionV14(
+        int? parteId, string? vista, DateTime? fechaDesde,
+        DateTime? fechaHasta, DateTime? semanaDesde, int? turnoId)
     {
         if (!UsuarioEnSesion())
             return Unauthorized();
 
+        var periodo = ResolverPeriodoDistribucionV14(vista, fechaDesde, fechaHasta, semanaDesde);
         await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync();
 
-        List<OperadorV13> operadores;
+        var turnos = await CargarTurnosDistribucionV13Async(cn, null);
+        var turno = turnoId.HasValue ? turnos.FirstOrDefault(x => x.TurnoID == turnoId.Value) : null;
+        if (turnoId.HasValue && turno == null)
+            return BadRequest(new { ok = false, message = "El horario seleccionado ya no esta activo." });
+        turno ??= turnos.FirstOrDefault(x => string.Equals(x.TipoTurno, "Regular", StringComparison.OrdinalIgnoreCase))
+            ?? turnos.FirstOrDefault();
+        if (turno == null)
+            return BadRequest(new { ok = false, message = "No existen horarios de produccion activos." });
 
+        // Conservar la lista elegible y la polivalencia del flujo actual.
+        List<OperadorV13> operadores;
         try
         {
-            operadores = await CargarOperadoresDistribucionV13Async(
-                parteId,
-                cn,
-                null);
+            operadores = await CargarOperadoresDistribucionV13Async(parteId, cn, null);
         }
         catch (SqlException)
         {
             operadores = await CargarOperadoresBasicosV13Async(cn);
         }
 
+        var horarios = await CargarHorariosSelectorRhV16Async(
+            periodo.EdicionDesde, periodo.EdicionHasta, cn);
+        var diasPeriodo = (periodo.EdicionHasta - periodo.EdicionDesde).Days + 1;
+        var porPersona = horarios.Where(x => x.PersonaID.HasValue)
+            .GroupBy(x => x.PersonaID!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var candidatos = operadores.Select(op =>
+        {
+            porPersona.TryGetValue(op.PersonaID, out var asignaciones);
+            asignaciones ??= new List<HorarioSelectorRhV16>();
+            var diasConHorario = asignaciones.Select(x => x.Fecha).Distinct().Count();
+            var diasCoincidentes = asignaciones.Where(x => CoincideHorarioSelectorRhV16(x, turno))
+                .Select(x => x.Fecha).Distinct().Count();
+            var coincide = diasCoincidentes == diasPeriodo;
+            var sinHorario = asignaciones.Count == 0;
+            var textos = asignaciones.Select(TextoHorarioSelectorRhV16).Distinct().ToList();
+            var horario = sinHorario ? "Sin horario RH" : string.Join(" / ", textos);
+            var estado = coincide ? "Horario coincide"
+                : sinHorario ? "Sin horario RH"
+                : diasCoincidentes > 0 ? "Coincide parcialmente" : "Otro horario RH";
+
+            return new
+            {
+                personaID = op.PersonaID,
+                numeroControl = op.NumeroControl,
+                nombre = op.Nombre,
+                nivel = op.Nivel,
+                horarioRH = horario,
+                turnoRH = string.Join(" / ", asignaciones.Select(x => x.Turno).Distinct()),
+                estadoHorarioRH = estado,
+                // Requisito: horario seleccionado -> sin horario -> otros horarios.
+                prioridadHorarioRH = coincide ? 0 : sinHorario ? 1 : 2,
+                diasConHorarioRH = diasConHorario,
+                diasCoincidentesRH = diasCoincidentes,
+                diasPeriodoRH = diasPeriodo,
+                horariosRH = asignaciones.GroupBy(x => new { Horario = TextoHorarioSelectorRhV16(x), x.Turno })
+                    .Select(g => new
+                    {
+                        horario = g.Key.Horario,
+                        turno = g.Key.Turno,
+                        fechas = g.Select(x => x.Fecha.ToString("yyyy-MM-dd")).Distinct().OrderBy(x => x).ToList()
+                    }).ToList()
+            };
+        }).OrderBy(x => x.prioridadHorarioRH)
+          .ThenByDescending(x => x.nivel ?? 0)
+          .ThenBy(x => x.nombre)
+          .ThenBy(x => x.personaID).ToList();
+
+        Response.Headers["Cache-Control"] = "no-store";
         return Json(new
         {
             ok = true,
-            operadores = operadores.Select(x => new
-            {
-                personaID = x.PersonaID,
-                numeroControl = x.NumeroControl,
-                nombre = x.Nombre,
-                nivel = x.Nivel
-            })
+            versionSelectorRH = "V16_0",
+            fuenteHorarioRH = "EscalaPersonal/Editor",
+            desdeRH = periodo.EdicionDesde.ToString("yyyy-MM-dd"),
+            hastaRH = periodo.EdicionHasta.ToString("yyyy-MM-dd"),
+            turnoSeleccionadoID = turno.TurnoID,
+            horarioSeleccionado = turno.Inicio.ToString(@"hh\:mm") + "–" + turno.Fin.ToString(@"hh\:mm"),
+            escalasRH = horarios.Where(x => x.EscalaID.HasValue)
+                .Select(x => new { escalaID = x.EscalaID, folio = x.Folio, estado = x.Estado }).Distinct().ToList(),
+            operadores = candidatos
         });
     }
 

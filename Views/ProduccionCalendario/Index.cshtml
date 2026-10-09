@@ -2843,26 +2843,7 @@
                     centroInsertarAntesDeCerrar(header, resumen);
                 }
 
-                if ((bloque.dataset.puedeInterrupcion || '').toLowerCase() === 'true') {
-                    const interrupcion = document.createElement('button');
-                    interrupcion.type = 'button';
-                    interrupcion.className = 'nsq-op-icon-btn nsq-op-calendar-tool-danger';
-                    interrupcion.title = (bloque.dataset.interrupcionModo || '').toLowerCase() === 'activa'
-                        ? 'Interrumpir esta produccion'
-                        : 'Interrupcion urgente';
-                    interrupcion.setAttribute('data-nsq-calendario-inyectado', '');
-                    interrupcion.setAttribute('data-op-interrupcion-urgente', '');
-                    interrupcion.dataset.interrupcionModo = bloque.dataset.interrupcionModo || 'urgente';
-                    interrupcion.dataset.programaId = String(programaId);
-                    interrupcion.dataset.of = bloque.dataset.of || '';
-                    interrupcion.dataset.parte = bloque.dataset.parte || '';
-                    interrupcion.dataset.descripcion = bloque.dataset.descripcion || '';
-                    interrupcion.dataset.molde = bloque.dataset.molde || '';
-                    interrupcion.dataset.maquinaId = bloque.dataset.maquinaId || '';
-                    interrupcion.dataset.maquinaCodigo = bloque.dataset.maquinaCodigo || '';
-                    interrupcion.innerHTML = '<i class="fa-solid fa-bolt"></i>';
-                    centroInsertarAntesDeCerrar(header, interrupcion);
-                }
+
             }
 
             function centroEjecutarScriptsInyectados(contenedor) {
@@ -3336,10 +3317,12 @@
                 });
             }
 
+            document.addEventListener('nsq:produccion-finalizada', () => refrescarDatosOperativos(true));
+
             async function refrescarDatosOperativos(forzar = false) {
                 const ahoraMs = Date.now();
 
-                if (centroOperativoEstaAbierto()) return;
+                if (centroOperativoEstaAbierto() && !forzar) return;
                 if (actualizandoDatosOperativos) return;
                 if (!forzar && ahoraMs - ultimoRefrescoDatos < intervaloRefrescoDatosMs - 500) return;
                 if (document.hidden && !forzar) return;
@@ -3382,7 +3365,7 @@
 
                     const html = await respuesta.text();
 
-                    if (centroOperativoEstaAbierto()) return;
+                    if (centroOperativoEstaAbierto() && !forzar) return;
 
                     const documento = new DOMParser().parseFromString(html, 'text/html');
                     const timelineNuevo = documento.querySelector('#calendarKiosk .timeline');

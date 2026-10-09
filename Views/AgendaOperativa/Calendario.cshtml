@@ -210,6 +210,8 @@
 
     string ClaseBarra(AgendaOperativaItemVm item)
     {
+        if (item.MaquinaLiberada) return "cal-bar-running";
+
         if (item.EstadoGeneral == AgendaOperativaEstadoGeneral.InterrumpidaUrgente
             || item.EstadoGeneral == AgendaOperativaEstadoGeneral.Pausada
             || item.EstadoGeneral == AgendaOperativaEstadoGeneral.Bloqueada)

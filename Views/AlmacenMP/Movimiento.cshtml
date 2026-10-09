@@ -243,8 +243,16 @@
                     <strong id="mpSplitTotal">0.0000 KG</strong>
                 </div>
                 <small class="alm-filter-hint">
-                    Se permiten 0.0000 KG en Virgen o Molido, pero la suma debe ser mayor que cero y no puede exceder el pendiente de la OF.
+                    La MP de la OF no puede exceder el pendiente. Puedes dejar ambos campos en 0 si entregas únicamente purga.
                 </small>
+            </div>
+            <div class="alm-field full" id="purga-extra">
+                <label for="CantidadPurga">MP adicional para purga (opcional)</label>
+                <div class="mp-split-grid">
+                    <div><input asp-for="CantidadPurga" class="alm-input" type="number" min="0" max="2" step="0.001" value="@Model.CantidadPurga.ToString("0.###", CultureInfo.InvariantCulture)" /><span asp-validation-for="CantidadPurga"></span></div>
+                    <div><select asp-for="TipoMPPurga" class="alm-select"><option value="V">Virgen</option><option value="M">Molido</option></select></div>
+                </div>
+                <small class="alm-filter-hint">Máximo acumulado: 2 KG por OF. Descuenta inventario y se registra aparte; no aumenta la entrega de MP de la OF. Deja 0 si no requiere purga.</small>
             </div>
         }
         else
