@@ -444,6 +444,7 @@ namespace ERP.NSQuell.Models
 
         public class IndexVM
         {
+            public bool EsHistorial { get; set; }
             public List<Escala> Escalas { get; set; } = new List<Escala>();
             public Escala? EscalaSemanaActual { get; set; }
             public int TotalBorradores { get; set; }

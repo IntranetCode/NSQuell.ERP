@@ -162,6 +162,10 @@
         ViewBag.SolicitudesReprogramacion as List<ERP.NSQuell.Controllers.SolicitudReprogramacionCalendarioVm>
         ?? new List<ERP.NSQuell.Controllers.SolicitudReprogramacionCalendarioVm>();
 
+    var operativaPorPrograma =
+        ViewBag.OperativaPorPrograma as Dictionary<int, AgendaOperativaItemVm>
+        ?? new Dictionary<int, AgendaOperativaItemVm>();
+
     var totalSolicitudesReprogramacion = solicitudesReprogramacion.Count;
     var hayInterrupcionesActivas = ViewBag.HayInterrupcionesActivas is bool hay && hay;
     var totalInterrupcionesActivas = ViewBag.TotalInterrupcionesActivas is int totalInterrupciones ? totalInterrupciones : 0;
@@ -172,6 +176,7 @@
 }
 
 @section Scripts {
+    <script src="~/js/PlaneacionCalendarioMaquinas/estado-operativo.js" asp-append-version="true" defer></script>
     <script id="NSQ_NOTIF_FOCUS_PROGRAMA_V6">
         (function () {
             function enfocarProgramaNotificado() {
@@ -2391,42 +2396,14 @@ else
                                 var tieneSolicitudReprogramacion =
                                 solicitudReprogramacionPendiente != null;
 
-                                var claseColorBloque =
-                                bloque.ClaseSemaforoCalendario;
-
-                                var estaEnParo =
-                                bloque.EstatusProduccionID == 4;
-
-                                var estaEnReliberacion =
-                                bloque.RequiereReliberacion ||
-                                bloque.ConfiguracionCalidadInvalidada;
-
-                                var estadoCalidadNormalizado =
-                                (bloque.EstadoCalidad ?? string.Empty)
-                                .Trim()
-                                .ToUpperInvariant();
-
-                                var estaEnCalidad =
-                                bloque.InspeccionCalidadID.HasValue &&
-                                !string.IsNullOrWhiteSpace(estadoCalidadNormalizado) &&
-                                estadoCalidadNormalizado != "CERRADA";
-
-                                if (estaEnParo)
-                                {
-                                    claseColorBloque = "bloque-paro";
-                                }
-                                else if (estaEnReliberacion)
-                                {
-                                    claseColorBloque = "bloque-reliberacion";
-                                }
-                                else if (estaEnCalidad)
-                                {
-                                    claseColorBloque = "bloque-calidad";
-                                }
-                                else if (bloque.EstatusProduccionID == 3)
-                                {
-                                    claseColorBloque = "bloque-produciendo";
-                                }
+                                operativaPorPrograma.TryGetValue(bloque.ProgramaProduccionID, out var operativa);
+                                var claseColorBloque = bloque.ResolverClaseSemaforoCalendario(operativa);
+                                var estadoOperativoTexto = bloque.ResolverEstadoSemaforoTexto(operativa);
+                                mostrarAlertaNoInicio = mostrarAlertaNoInicio &&
+                                    !bloque.TieneInicioRealProduccion &&
+                                    !bloque.ProduccionFinalizada && !bloque.YaProducido &&
+                                    claseColorBloque != "bloque-producido" && claseColorBloque != "bloque-cerrado";
+                                if (!mostrarAlertaNoInicio) textoAlertaNoInicio = string.Empty;
 
                                 @if (mostrarSombraAtraso && sombraWidth > 0)
                                 {
@@ -2442,6 +2419,7 @@ else
                                         draggable="@(puedeMover ? "true" : "false")"
                                         data-nsq-style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
                                         data-programa-id="@bloque.ProgramaProduccionID"
+                                        data-color-operativo="@claseColorBloque"
                                         data-trabajar-domingo="@(bloque.TrabajarDomingo ? "true" : "false")"
                                         data-maquina-id="@bloque.MaquinaID"
                                         data-inicio="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
@@ -2454,7 +2432,7 @@ else
                                         data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
                                         data-bs-toggle="modal"
                                         data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
-                                        title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @(mostrarAlertaNoInicio? textoAlertaNoInicio + " · " : "")@tituloBloqueo">
+                                        title="@bloque.OFTexto · @bloque.ParteTexto · @estadoOperativoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @(mostrarAlertaNoInicio? textoAlertaNoInicio + " · " : "")@tituloBloqueo">
 
                                     @if (mostrarAlertaNoInicio)
                                     {
@@ -2486,9 +2464,9 @@ else
                                     @bloque.OFTexto · @bloque.ParteTexto
                                 </strong>
 
-                                <span>
+                                <span data-estado-operativo-linea>
                                     @(bloque.ClienteNombre ?? "Sin cliente") ·
-                                    @bloque.EstadoSemaforoTexto
+                                    <span data-estado-operativo-texto>@estadoOperativoTexto</span>
                                 </span>
 
                                 <span class="operator-line">
@@ -2731,7 +2709,7 @@ else
                         <div class="col-md-4">
                             <div class="detail-card">
                                 <small>Semáforo</small>
-                                <strong class="d-block">@bloque.EstadoSemaforoTexto</strong>
+                                <strong class="d-block" data-semaforo-programa="@bloque.ProgramaProduccionID">@bloque.ResolverEstadoSemaforoTexto(operativaPorPrograma.GetValueOrDefault(bloque.ProgramaProduccionID))</strong>
 
                                 @if (!bloque.PuedeMoverCalendario)
                                 {

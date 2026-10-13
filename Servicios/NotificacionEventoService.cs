@@ -10,16 +10,19 @@ public sealed class NotificacionEventoService
     private readonly string _connectionString;
     private readonly ILogger<NotificacionEventoService> _logger;
     private readonly ICorreoErpBackgroundQueue _correoQueue;
+    private readonly AlmacenStockAlertaService _stock;
 
     public NotificacionEventoService(
         IConfiguration configuration,
         ICorreoErpBackgroundQueue correoQueue,
+        AlmacenStockAlertaService stock,
         ILogger<NotificacionEventoService> logger)
     {
         _connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Falta ConnectionStrings:DefaultConnection.");
         _logger = logger;
         _correoQueue = correoQueue;
+        _stock = stock;
     }
 
     private sealed record OfCreadaDatos(
@@ -75,6 +78,8 @@ public sealed class NotificacionEventoService
             };
 
             var insertadas = await PublicarAsync(evento);
+            // Stock se revisa después del COMMIT de la OF aunque no exista programa de calendario.
+            await _stock.RevisarAsync();
             _logger.LogInformation(
                 "OF_CREADA global publicada. SolicitudProduccionID={Id}; destinatarios nuevos={Insertadas}.",
                 solicitudProduccionId,
@@ -183,7 +188,7 @@ END;
 
         // NSQ_SMTP_BACKGROUND_QUEUE_V1_0
         // El evento ya hizo COMMIT. El SMTP queda fuera de la peticion HTTP.
-        if (insertadas > 0)
+        if (insertadas > 0 && codigoEvento != "OF_CREADA")
         {
             var trabajoCorreo = new CorreoErpTrabajo(
                 destinatarios.ToArray(),
@@ -193,7 +198,7 @@ END;
                 codigoEvento,
                 null);
 
-            if (_correoQueue.TryEnqueue(trabajoCorreo))
+            if (await _correoQueue.EnqueueAsync(trabajoCorreo))
             {
                 _logger.LogInformation(
                     "Correo evento {CodigoEvento} encolado para {Usuarios} usuario(s).",

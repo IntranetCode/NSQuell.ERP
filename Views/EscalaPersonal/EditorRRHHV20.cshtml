@@ -24,12 +24,12 @@
         .Distinct()
         .ToHashSet();
 
-    var funcionOperador = Model.Funciones
-        .FirstOrDefault(x =>
-            string.Equals(
-                x.Nombre?.Trim(),
-                "OPERADOR",
-                StringComparison.OrdinalIgnoreCase));
+    var funcionesTabla = Model.Funciones.Where(x => x.Activo)
+        .Select(x => new { x.FuncionID, x.Nombre, x.Orden, Editable = true })
+        .Concat(Model.Grupos.Where(g => !Model.Funciones.Any(f => f.Activo && f.FuncionID == g.FuncionID))
+            .Select(g => new { g.FuncionID, Nombre = g.NombreFuncion, Orden = g.OrdenFuncion, Editable = false }))
+        .GroupBy(x => x.FuncionID).Select(g => g.First()).OrderBy(x => x.Orden).ThenBy(x => x.Nombre).ToList();
+
 }
 
 @section Styles {
@@ -39,10 +39,11 @@
     <link rel="stylesheet"
           href="~/css/EscalaPersonal/editor-rrhh-v20.css"
           asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/EscalaPersonal/editor-arrastre-v1.css" asp-append-version="true" />
 }
 
 @section Scripts {
-    <script src="~/js/EscalaPersonal/editor-rrhh-v20.js"
+    <script src="~/js/EscalaPersonal/editor-arrastre-v1.js"
             asp-append-version="true"></script>
 }
 
@@ -57,8 +58,8 @@
             <span class="rrhh20-eyebrow">Recursos Humanos · Programación semanal</span>
             <h1>Escala de personal · Semana @Model.Escala.NumeroSemana</h1>
             <p>
-                Selecciona un horario y marca a todas las personas que pertenecen a ese turno.
-                No es necesario capturar persona por persona.
+                Arrastra a las personas a su horario en la tabla.
+                Cada movimiento se guarda al confirmarlo el sistema.
             </p>
         </div>
 
@@ -109,7 +110,7 @@
         </article>
         <article>
             <span>Personal con horario</span>
-            <strong>@asignadas.Count</strong>
+            <strong id="rhAssignedCount">@asignadas.Count</strong>
         </article>
     </section>
 
@@ -121,298 +122,65 @@
         </div>
     }
 
-    <section class="rrhh20-workspace">
-        <div class="rrhh20-panel">
-            <div class="rrhh20-panel-head">
-                <div>
-                    <span class="rrhh20-step">1</span>
-                    <div>
-                        <h2>Define el horario</h2>
-                        <p>Elige tipo de personal, turno y, si aplica, máquina preferente.</p>
-                    </div>
-                </div>
-
-                @if (Model.PuedeEditar)
-                {
-                    <button type="button"
-                            class="rrhh20-btn rrhh20-btn-light"
-                            id="rrhh20CopyPrevious">
-                        Copiar semana anterior
-                    </button>
-                }
-            </div>
-
-            <div class="rrhh20-controls">
-                <label>
-                    <span>Tipo de personal</span>
-                    <select id="rrhh20Function" @(Model.PuedeEditar ? null : "disabled")>
-                        <option value="">Selecciona una función</option>
-                        @foreach (var funcion in Model.Funciones
-                            .Where(x => x.Activo)
-                            .OrderBy(x => x.Orden)
-                            .ThenBy(x => x.Nombre))
-                        {
-                            <option value="@funcion.FuncionID"
-                                    data-name="@funcion.Nombre"
-                                    data-machine="@funcion.RequiereMaquina.ToString().ToLowerInvariant()"
-                                    selected="@(funcionOperador?.FuncionID == funcion.FuncionID)">
-                                @funcion.Nombre
-                            </option>
-                        }
-                    </select>
-                </label>
-
-                <label>
-                    <span>Horario</span>
-                    <select id="rrhh20Turn"
-                            @(Model.PuedeEditar ? null : "disabled")>
-                        <option value="">Selecciona un horario</option>
-                        @foreach (var turno in Model.Turnos.OrderBy(x => x.Orden))
-                        {
-                            <option value="@turno.EscalaTurnoID">
-                                @turno.Nombre · @turno.HorarioTexto
-                            </option>
-                        }
-                        <option value="0">Sin horario / quitar asignación</option>
-                    </select>
-                </label>
-
-                <label>
-                    <span>Máquina preferente</span>
-                    <select id="rrhh20Machine"
-                            @(Model.PuedeEditar ? null : "disabled")>
-                        <option value="">Sin preferencia de máquina</option>
-                        @foreach (var maquina in Model.Maquinas
-                            .Where(x => x.Activo)
-                            .OrderBy(x => x.Codigo)
-                            .ThenBy(x => x.Nombre))
-                        {
-                            <option value="@maquina.MaquinaID">@maquina.Texto</option>
-                        }
-                    </select>
-                </label>
-            </div>
-
-            <div class="rrhh20-note">
-                <strong>Operadores:</strong>
-                la función <b>OPERADOR</b> es la que se conecta con
-                Programación de Personal de Producción/Planeación.
-                Máquina es preferencia; Liz puede cambiar la asignación final por OF.
-            </div>
-        </div>
-
-        <div class="rrhh20-panel rrhh20-people-panel">
-            <div class="rrhh20-panel-head">
-                <div>
-                    <span class="rrhh20-step">2</span>
-                    <div>
-                        <h2>Marca al personal</h2>
-                        <p>Selecciona varias personas y aplica el horario en un solo movimiento.</p>
-                    </div>
-                </div>
-
-                <div class="rrhh20-counter">
-                    <strong id="rrhh20SelectedCount">0</strong>
-                    <span>seleccionados</span>
-                </div>
-            </div>
-
-            <div class="rrhh20-search-row">
-                <input type="search"
-                       id="rrhh20Search"
-                       placeholder="Buscar por nombre, número de control o puesto..." />
-
-                <button type="button"
-                        id="rrhh20SelectVisible"
-                        class="rrhh20-btn rrhh20-btn-light">
-                    Marcar visibles
-                </button>
-
-                <button type="button"
-                        id="rrhh20Clear"
-                        class="rrhh20-btn rrhh20-btn-light">
-                    Limpiar
-                </button>
-            </div>
-
-            <form id="rrhh20BulkForm"
-                  asp-action="GuardarAsignacionesMasivasV20"
-                  method="post">
-                @Html.AntiForgeryToken()
-
-                <input type="hidden"
-                       name="EscalaID"
-                       value="@Model.Escala.EscalaID" />
-                <input type="hidden"
-                       name="FuncionID"
-                       id="rrhh20FunctionHidden" />
-                <input type="hidden"
-                       name="EscalaTurnoID"
-                       id="rrhh20TurnHidden" />
-                <input type="hidden"
-                       name="MaquinaID"
-                       id="rrhh20MachineHidden" />
-
-                <div class="rrhh20-people-grid" id="rrhh20PeopleGrid">
-                    @foreach (var persona in Model.Personas
-                        .Where(x => x.Activo)
-                        .OrderBy(x => x.NombreCompleto))
-                    {
-                        var actual = asignaciones
-                            .FirstOrDefault(x =>
-                                x.Asignacion.PersonalID == persona.PersonalID);
-
-                        var actualTexto = actual == null
-                            ? "Sin horario asignado"
-                            : $"{actual.Grupo.NombreFuncion} · {actual.Celda.NombreTurno}" +
-                              (string.IsNullOrWhiteSpace(actual.Grupo.NombreMaquina)
-                                  ? ""
-                                  : $" · {actual.Grupo.NombreMaquina}");
-
-                        <label class="rrhh20-person"
-                               data-person
-                               data-search="@($"{persona.NumeroEmpleado} {persona.NombreCompleto} {persona.Puesto}".ToLowerInvariant())"
-                               data-puesto="@persona.Puesto">
-                            <input class="rrhh20-person-check"
-                                   type="checkbox"
-                                   name="PersonalIDs"
-                                   value="@persona.PersonalID"
-                                   @(Model.PuedeEditar ? null : "disabled") />
-
-                            <span class="rrhh20-person-main">
-                                <strong title="@persona.NombreCompleto">@persona.NombreCompleto</strong>
-                                <small>
-                                    @(string.IsNullOrWhiteSpace(persona.NumeroEmpleado)
-                                        ? $"ID {persona.PersonalID}"
-                                        : persona.NumeroEmpleado)
-                                    @if (!string.IsNullOrWhiteSpace(persona.Puesto))
-                                    {
-                                        <text> · @persona.Puesto</text>
-                                    }
-                                </small>
-                                <span class="rrhh20-current @(actual == null ? "" : "assigned")"
-                                      title="@actualTexto">
-                                    @actualTexto
-                                </span>
-                            </span>
-                        </label>
-                    }
-                </div>
-
-                @if (Model.PuedeEditar)
-                {
-                    <div class="rrhh20-sticky-action">
-                        <div>
-                            <strong id="rrhh20ActionTitle">
-                                Selecciona función, horario y personas
-                            </strong>
-                            <span id="rrhh20ActionHelp">
-                                Puedes cambiar de turno a varias personas al mismo tiempo.
-                            </span>
-                        </div>
-
-                        <button type="submit"
-                                class="rrhh20-btn rrhh20-btn-primary"
-                                id="rrhh20Apply">
-                            Aplicar horario
-                        </button>
-                    </div>
-                }
-            </form>
-        </div>
-    </section>
-
-    <section class="rrhh20-panel">
+    @* NSQ_RH_ARRASTRE_HISTORIAL_V1_0 *@
+    <form id="rhDragSave" asp-action="GuardarAsignacionesMasivasV20" method="post" hidden>
+        @Html.AntiForgeryToken()
+    </form>
+    <section class="rrhh20-panel rh-catalog-panel" aria-labelledby="rhPeopleTitle">
         <div class="rrhh20-panel-head">
-            <div>
-                <span class="rrhh20-step">3</span>
-                <div>
-                    <h2>Vista de la escala</h2>
-                    <p>
-                        Esta matriz es la que alimenta el PDF semanal.
-                        Operadores también alimentan ProducciónPersonal.
-                    </p>
-                </div>
-            </div>
-
-            <a asp-action="Novedades"
-               asp-route-id="@Model.Escala.EscalaID"
-               class="rrhh20-btn rrhh20-btn-light">
-                Novedades (@Model.Novedades.Count)
-            </a>
+            <div><span class="rrhh20-step">1</span><div><h2 id="rhPeopleTitle">Personal sin horario</h2><p>Al asignar un horario, el nombre sale de esta lista. Los asignados se pueden mover entre horarios desde la tabla.</p></div></div>
+            @if (Model.PuedeEditar){<button type="button" class="rrhh20-btn rrhh20-btn-light" id="rrhh20CopyPrevious">Copiar semana anterior</button>}
         </div>
-
-        <div class="rrhh20-matrix-wrap">
-            <table class="rrhh20-matrix">
-                <thead>
-                    <tr>
-                        <th>Función / Máquina</th>
-                        @foreach (var turno in Model.Turnos.OrderBy(x => x.Orden))
-                        {
-                            <th>
-                                <strong>@turno.Nombre</strong>
-                                <span>@turno.HorarioTexto</span>
-                            </th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (Model.Grupos.Count == 0)
-                    {
-                        <tr>
-                            <td colspan="@(Model.Turnos.Count + 1)"
-                                class="rrhh20-empty">
-                                Todavía no hay personal programado para esta semana.
-                            </td>
-                        </tr>
-                    }
-                    else
-                    {
-                        @foreach (var grupo in Model.Grupos
-                            .OrderBy(x => x.OrdenDepartamento)
-                            .ThenBy(x => x.OrdenFuncion)
-                            .ThenBy(x => x.NombreMaquina))
-                        {
-                            <tr>
-                                <td class="rrhh20-row-title">
-                                    <strong>@grupo.NombreFuncion</strong>
-                                    @if (!string.IsNullOrWhiteSpace(grupo.NombreMaquina))
-                                    {
-                                        <span>@grupo.NombreMaquina</span>
-                                    }
-                                </td>
-
-                                @foreach (var turno in Model.Turnos.OrderBy(x => x.Orden))
-                                {
-                                    var celda = grupo.Celdas
-                                        .FirstOrDefault(x =>
-                                            x.EscalaTurnoID == turno.EscalaTurnoID);
-
-                                    <td>
-                                        @if (celda?.Asignaciones?.Count > 0)
-                                        {
-                                            <div class="rrhh20-cell-people">
-                                                @foreach (var item in celda.Asignaciones
-                                                    .OrderBy(x => x.NombrePersona))
-                                                {
-                                                    <span>
-                                                        @if (!string.IsNullOrWhiteSpace(item.NumeroEmpleado))
-                                                        {
-                                                            <b>@item.NumeroEmpleado</b>
-                                                        }
-                                                        @item.NombrePersona
-                                                    </span>
-                                                }
-                                            </div>
-                                        }
-                                    </td>
-                                }
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
+        <div class="rh-search">
+            <input type="search" id="rhSearch" aria-label="Buscar personal" placeholder="Buscar por nombre, número de control o puesto…" />
+            <span class="rh-filter">Sólo personas pendientes de asignar</span>
+            <button type="button" class="rrhh20-btn rrhh20-btn-light" id="rhClearSelection">Limpiar selección</button>
         </div>
+        <div class="rh-people-grid" id="rhCatalog">
+            @foreach (var persona in Model.Personas.Where(x => x.Activo).OrderBy(x => x.NombreCompleto)){
+                var actuales = asignaciones.Where(x => x.Asignacion.PersonalID == persona.PersonalID).ToList();
+                var textoActual = actuales.Count == 0 ? "Sin horario asignado" : string.Join(" / ", actuales.Select(x => $"{x.Grupo.NombreFuncion} · {x.Celda.NombreTurno}").Distinct());
+                <button type="button" class="rh-person" data-rh-person="@persona.PersonalID" data-assigned="@(actuales.Count > 0 ? "true" : "false")" hidden="@(actuales.Count > 0)"
+                        data-search="@($"{persona.NumeroEmpleado} {persona.NombreCompleto} {persona.Puesto}")"
+                        draggable="@(Model.PuedeEditar ? "true" : "false")" aria-pressed="false" @(Model.PuedeEditar ? null : "disabled")>
+                    <strong>@persona.NombreCompleto</strong><small>@persona.NumeroEmpleado @if(!string.IsNullOrWhiteSpace(persona.Puesto)){<text> · @persona.Puesto</text>}</small>
+                    <span class="rh-current">@textoActual</span>
+                </button>
+            }
+        </div>
+        <p class="rh-empty-catalog" id="rhNoPeople" hidden>Todas las personas disponibles ya tienen horario. Puedes moverlas directamente en la tabla.</p>
+    </section>
+    <div class="rh-status" id="rhStatus" role="status" aria-live="polite">@(Model.PuedeEditar ? "Arrastra una persona al horario que le corresponde." : "Consulta de horarios: esta escala no permite cambios.")</div>
+    <section class="rrhh20-panel" aria-labelledby="rhBoardTitle">
+        <div class="rrhh20-panel-head"><div><span class="rrhh20-step">2</span><div><h2 id="rhBoardTitle">Tabla de horarios</h2><p>Las filas son funciones y las columnas son horarios. Puedes mover a una persona de un turno a otro.</p></div></div>
+            <a asp-action="Novedades" asp-route-id="@Model.Escala.EscalaID" class="rrhh20-btn rrhh20-btn-light">Novedades (@Model.Novedades.Count)</a>
+        </div>
+        @if(Model.Turnos.Count == 0){<div class="rrhh20-empty">Esta escala no tiene horarios configurados.</div>}
+        else{
+        <div class="rrhh20-matrix-wrap rh-board-wrap">
+            <table class="rh-board"><thead><tr><th scope="col">Función</th>@foreach(var turno in Model.Turnos.OrderBy(x=>x.Orden)){<th scope="col"><strong>@turno.Nombre</strong><small>@turno.HorarioTexto</small></th>}</tr></thead><tbody>
+            @foreach(var funcion in funcionesTabla){
+                <tr><th scope="row">@funcion.Nombre</th>
+                @foreach(var turno in Model.Turnos.OrderBy(x=>x.Orden)){
+                    var personasCelda = asignaciones.Where(x=>x.Grupo.FuncionID==funcion.FuncionID && x.Celda.EscalaTurnoID==turno.EscalaTurnoID).Select(x=>x.Asignacion).GroupBy(x=>x.PersonalID).Select(x=>x.First()).OrderBy(x=>x.NombrePersona).ToList();
+                    <td><div class="rh-drop" data-rh-drop data-disabled="@((!funcion.Editable).ToString().ToLowerInvariant())" data-function="@funcion.FuncionID" data-turn="@turno.EscalaTurnoID" data-label="@($"{funcion.Nombre} · {turno.Nombre} · {turno.HorarioTexto}")">
+                        <div class="rh-cell-head"><span data-rh-count>@personasCelda.Count</span> personas<button type="button" class="rh-assign-here" data-rh-assign disabled>Asignar aquí</button></div>
+                        <div class="rh-cell-people">
+                        @foreach(var persona in personasCelda){
+                            var disponible = Model.PuedeEditar && Model.Personas.Any(x=>x.PersonalID==persona.PersonalID && x.Activo);
+                            <button type="button" class="rh-person rh-assigned" data-rh-person="@persona.PersonalID" draggable="@(disponible ? "true" : "false")" aria-pressed="false" @(disponible ? null : "disabled")><strong>@persona.NombrePersona</strong><small>@persona.NumeroEmpleado</small></button>
+                        }
+                        </div><p class="rh-drop-hint">Arrastra los nombres aquí</p>
+                    </div></td>
+                }
+                </tr>
+            }
+            </tbody></table>
+        </div>
+        }
+        @if(Model.PuedeEditar){
+        <div class="rh-unassign rh-drop" data-rh-drop data-function="0" data-turn="0" data-label="Sin horario asignado"><strong>Sin horario</strong><span>Arrastra aquí para quitar el horario de esta semana.</span><button type="button" class="rh-assign-here" data-rh-assign disabled>Quitar horario a la selección</button></div>
+        }
     </section>
 
     <section class="rrhh20-panel">
@@ -461,14 +229,14 @@
     </section>
 
     <section class="rrhh20-footer-actions">
-        @if (Model.PuedePublicar)
+        @if (Model.PuedeEditar)
         {
-            <form asp-action="Publicar" method="post">
+            <form asp-action="Publicar" method="post" data-rh-publish-form>
                 @Html.AntiForgeryToken()
                 <input type="hidden"
                        name="escalaID"
                        value="@Model.Escala.EscalaID" />
-                <button type="submit"
+                <button type="submit" id="rhPublish" disabled="@(asignadas.Count == 0)"
                         class="rrhh20-btn rrhh20-btn-primary">
                     Publicar escala
                 </button>

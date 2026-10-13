@@ -3,7 +3,7 @@
 @model EscalaVM.IndexVM
 
 @{
-    ViewData["Title"] = "Escala de Personal";
+    ViewData["Title"] = Model.EsHistorial ? "Historial de escalas" : "Escala de Personal";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
@@ -18,12 +18,13 @@
     <div class="ep-header">
         <div>
             <div class="ep-eyebrow">Recursos Humanos</div>
-            <h1 class="ep-title">Escala de Personal</h1>
+            <h1 class="ep-title">@(Model.EsHistorial ? "Historial de escalas" : "Escala de Personal")</h1>
             <p class="ep-subtitle">
-                Programa turnos, funciones y novedades del personal por semana.
+                @(Model.EsHistorial ? "Consulta las semanas anteriores; conserva sus horarios, novedades y PDF." : "Las cuatro semanas más recientes registradas. Consulta las anteriores en Historial.")
             </p>
         </div>
 
+        <a asp-action="@(Model.EsHistorial ? "Index" : "Historial")" class="ep-btn-light">@(Model.EsHistorial ? "Volver a últimas semanas" : "Historial")</a>
         @if (Model.PuedeAdministrar)
         {
             <a asp-controller="EscalaPersonal"
@@ -49,7 +50,7 @@
         </div>
     }
 
-    @if (Model.EscalaSemanaActual != null)
+    @if (!Model.EsHistorial && Model.EscalaSemanaActual != null)
     {
         var actual = Model.EscalaSemanaActual;
         <section class="ep-current" aria-label="Escala de la semana actual">
@@ -160,7 +161,7 @@
     }
     <section class="ep-panel">
         <div class="ep-panel-head">
-            <h2 class="ep-panel-title">Programaciones registradas</h2>
+            <h2 class="ep-panel-title">@(Model.EsHistorial ? "Semanas anteriores" : "Últimas cuatro semanas")</h2>
             @if (Model.Escalas.Count > 0)
             {
                 <div class="ep-filters">
@@ -183,9 +184,9 @@
         {
             <div class="ep-empty">
                 <div class="ep-empty-mark">EP</div>
-                <div class="ep-empty-title">Todavía no hay escalas registradas</div>
+                <div class="ep-empty-title">@(Model.EsHistorial ? "No hay semanas anteriores en el historial" : "Todavía no hay escalas registradas")</div>
                 <div class="ep-empty-text">
-                    Crea la primera programación semanal para comenzar a asignar personal.
+                    @(Model.EsHistorial ? "Las escalas anteriores a las cuatro semanas recientes aparecerán aquí." : "Crea la primera programación semanal para comenzar a asignar personal.")
                 </div>
                 @if (Model.PuedeAdministrar)
                 {

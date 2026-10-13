@@ -489,6 +489,11 @@
             flex-direction: column
         }
     }
+    .pi-purga{margin-top:14px;padding:12px;border:1px solid #dce7e5;border-radius:12px;background:#f7fbfa}
+    .pi-purga-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:10px;margin-top:8px;border-top:1px solid #e1e9e7}
+    .pi-purga-row>div{flex:1;min-width:180px}.pi-purga-row small{display:block}
+    .pi-purga-row form{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.pi-purga-row input{padding:6px;border:1px solid #cad7d3;border-radius:6px;max-width:210px}
+    .pi-purga-row input[type=number]{width:85px}
 </style>
 
 <div id="@rootId"
@@ -551,6 +556,7 @@
 
         const urlDatos='@Url.Action("OperativaInsumosDatos", "ProduccionPreparacion")';
         const urlGuardar='@Url.Action("ConfirmarRecepcionMaterialOperativa", "ProduccionPreparacion")';
+        const urlPurga='@Url.Action("ConfirmarPurgaOperativa", "ProduccionPreparacion")';
         const urlDevolver='@Url.Action("DevolverMaterialOperativa", "ProduccionPreparacion")';
 
         const motivosMp=[
@@ -1030,6 +1036,18 @@
                 html+='</div></details>';
             }
 
+            // NSQ_PURGA_RECEPCION_V2_0: cantidades independientes del resumen de MP OF.
+            if(tipo==='MP'&&Array.isArray(data.purgas)&&data.purgas.length){
+                html+='<section class="pi-purga"><div class="pi-name">MP extra para purga</div><small>Recepción independiente · no suma a la cantidad de la OF</small>';
+                data.purgas.forEach(x=>{
+                    const editar=!soloLectura&&!!data.puedeGestionar&&!x.fechaRecepcion;
+                    html+=`<div class="pi-purga-row"><div><strong>${esc(x.material)}</strong><small>${esc(x.tipoMP==='M'?'Molido':'Virgen')} · Lote ${esc(x.lote||'-')} · ${numero(x.cantidadKg)} KG entregados · ${fecha(x.fechaEntrega)}</small></div>
+                    ${editar?`<form data-pi-purga-form data-id="${x.purgaId}" data-max="${x.cantidadKg}"><label>KG recibidos <input name="CantidadRecibida" type="number" min="0" max="${x.cantidadKg}" step="0.001" value="${x.cantidadKg}" required /></label><input name="Motivo" maxlength="500" placeholder="Motivo si recibes menos" aria-label="Motivo de diferencia en purga" /><button type="submit" class="pi-btn pi-btn-primary">Recibir purga</button></form>`:
+                    `<span class="pi-pill">${x.fechaRecepcion?`${numero(x.cantidadRecibida)} KG recibidos · ${fecha(x.fechaRecepcion)}${Number(x.cantidadRecibida)<Number(x.cantidadKg)?' · Con diferencia':''}`:'Pendiente de recepción'}</span>`}
+                    ${x.motivo?`<small>${esc(x.motivo)}</small>`:''}</div>`;
+                });
+                html+='</section>';
+            }
             contenido.innerHTML=html;
             enlazarEventos();
         }
@@ -1077,7 +1095,23 @@
             if(form instanceof HTMLFormElement) form.reset();
         }
 
+        async function guardarPurga(event){
+            event.preventDefault();
+            const form=event.currentTarget, boton=form.querySelector('button'), data=new FormData(form);
+            const kg=Number(data.get('CantidadRecibida')), max=Number(form.dataset.max);
+            if(!Number.isFinite(kg)||kg<0||kg>max){mensaje('La recepción debe estar entre 0 y los KG entregados.','bad');return;}
+            if(kg<max&&!String(data.get('Motivo')||'').trim()){mensaje('Escribe el motivo de la diferencia de purga.','bad');form.querySelector('[name="Motivo"]').focus();return;}
+            data.append('PurgaID',form.dataset.id);data.append('ProgramaProduccionID',String(programaId));data.append('__RequestVerificationToken',token);
+            boton.disabled=true;
+            try{
+                const response=await fetch(urlPurga,{method:'POST',body:data,credentials:'same-origin',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+                const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.mensaje||'No se pudo recibir la purga.');
+                await cargar();mensaje(result.mensaje,'ok');refrescarCentro();
+            }catch(error){mensaje(error.message||'No se pudo recibir la purga.','bad');boton.disabled=false;}
+        }
+
         function enlazarEventos(){
+            root.querySelectorAll('[data-pi-purga-form]').forEach(form=>form.addEventListener('submit',guardarPurga));
             root.querySelectorAll('[data-pi-form]').forEach(form=>{
                 const decision=form.querySelector('[data-pi-decision]');
                 decision?.addEventListener('change',()=>actualizarCamposRecepcion(form));

@@ -49,6 +49,19 @@ public sealed class NotificacionCorreoErpService
         if (ids.Count == 0)
             return new ServicioNotificaciones.ResultadoEnvio();
 
+        // Configuración incompleta es un bloqueo visible y reintentable, no un envío exitoso.
+        var motivoBloqueo = !_opciones.Habilitado ? "Correo deshabilitado globalmente."
+            : string.IsNullOrWhiteSpace(_opciones.SmtpHost) ? "Falta CorreoNotificaciones:SmtpHost."
+            : string.IsNullOrWhiteSpace(_opciones.Remitente) ? "Falta CorreoNotificaciones:Remitente."
+            : !string.IsNullOrWhiteSpace(_opciones.Usuario) && string.IsNullOrWhiteSpace(_opciones.Contrasena)
+                ? "Falta contraseña SMTP. Configura NSQ_SMTP_PASSWORD en el proceso ERP o CorreoNotificaciones:Contrasena."
+                : null;
+        if (motivoBloqueo != null)
+        {
+            _logger.LogWarning("Correo ERP bloqueado: {Motivo}", motivoBloqueo);
+            return new ServicioNotificaciones.ResultadoEnvio { Encontrados=ids.Count, FiltradosPorCandados=ids.Count, Mensajes=new List<string>{motivoBloqueo} };
+        }
+
         var entorno = ResolverEntornoErp();
         var prefijoEntorno = entorno == "TEST" ? "[TEST]" : string.Empty;
 

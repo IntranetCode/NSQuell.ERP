@@ -1,5 +1,6 @@
 ﻿using ERP.NSQuell.Models;
 using ERP.NSQuell.Servicios.Planeacion;
+using ERP.NSQuell.Servicios.Produccion;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -14,10 +15,16 @@ namespace ERP.NSQuell.Controllers
         private readonly IConfiguration _configuration;
         private readonly IPlaneacionSecuenciaService _planeacionSecuenciaService;
 
-        public PlaneacionCalendarioMaquinasController(IConfiguration configuration, IPlaneacionSecuenciaService planeacionSecuenciaService)
+        private readonly AgendaOperativaService _agendaOperativaService;
+
+        public PlaneacionCalendarioMaquinasController(
+            IConfiguration configuration,
+            IPlaneacionSecuenciaService planeacionSecuenciaService,
+            AgendaOperativaService agendaOperativaService)
         {
             _configuration = configuration;
             _planeacionSecuenciaService = planeacionSecuenciaService;
+            _agendaOperativaService = agendaOperativaService;
         }
         private string ConnectionString =>
             _configuration.GetConnectionString("DefaultConnection")
@@ -39,6 +46,7 @@ namespace ERP.NSQuell.Controllers
         [HttpGet("")]
         [HttpGet("Index")]
         [HttpGet("/Produccion/Calendario", Name = "ProduccionCalendario")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         public async Task<IActionResult> Index(string? vista, DateTime? fecha, DateTime? rangoInicio, DateTime? rangoFin)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
@@ -119,6 +127,23 @@ namespace ERP.NSQuell.Controllers
                 Ahora = ahora,
                 Maquinas = maquinas
             };
+
+            // NSQ_CALENDARIOS_ESTADO_COMPARTIDO_V1_0: misma fuente operativa que Producción.
+            var agendaOperativa = await _agendaOperativaService.ObtenerAgendaAsync(
+                new AgendaOperativaFiltroVm
+                {
+                    SoloAtencion = false,
+                    SoloBloqueadas = false,
+                    IncluirProduciendo = true,
+                    VentanaHoras = 72
+                }, ObtenerUsuarioID(), periodo.Inicio, periodo.Fin);
+            var programasVisibles = maquinas.SelectMany(x => x.Bloques)
+                .Select(x => x.ProgramaProduccionID).ToHashSet();
+            ViewBag.OperativaPorPrograma = agendaOperativa.Items
+                .Where(x => programasVisibles.Contains(x.ProgramaProduccionID))
+                .GroupBy(x => x.ProgramaProduccionID)
+                .ToDictionary(x => x.Key, x => x.OrderBy(y => y.OrdenPrioridad)
+                    .ThenByDescending(y => y.RequiereAtencionInmediata).First());
 
             ViewBag.SolicitudesReprogramacion = solicitudesReprogramacion;
             ViewBag.TotalSolicitudesReprogramacion = solicitudesReprogramacion.Count;

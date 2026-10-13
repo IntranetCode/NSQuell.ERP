@@ -8,7 +8,7 @@
     var areaPrincipal=Model.Areas.FirstOrDefault();
     var mayorDia=Model.Dias.Count>0?Math.Max(1,Model.Dias.Max(x=>x.Horas)):1;
     var mayorArea=Model.Areas.Count>0?Math.Max(1,Model.Areas.Max(x=>x.Horas)):1;
-    var maxHoras=Math.Max(1,Model.Frentes.Count>0?Model.Frentes.Max(x=>x.HorasNetas):0);
+    var maxHoras=Math.Max(1,Model.OrdenesTrabajo.Count>0?Model.OrdenesTrabajo.Max(x=>x.HorasNetas):0);
     var inv=CultureInfo.InvariantCulture;
     string Num(double n)=>n.ToString("0.###",inv);
 }
@@ -21,20 +21,25 @@
   <div class="tdx-header-actions"><span class="tdx-snapshot"><span class="tdx-live-dot"></span> Consulta @Model.Actualizado.ToString("HH:mm")</span><button type="button" class="tdx-btn tdx-btn-quiet" data-tdx-print><i class="fa-solid fa-print"></i> Imprimir</button></div>
  </header>
  <form method="get" class="tdx-filter" id="tdx-filter">
+  <div><label for="enfoque">Qué necesitas ver</label><select id="enfoque" name="enfoque"><option value="AHORA" selected="@(Model.Enfoque=="AHORA")">Pendientes ahora</option><option value="HISTORICO" selected="@(Model.Enfoque=="HISTORICO")">Histórico del periodo</option></select></div>
+  <div><label for="departamento">Área</label><select id="departamento" name="departamento"><option value="">Todas las áreas</option>@foreach(var d in Model.Departamentos){<option value="@d" selected="@(d==Model.Departamento)">@d</option>}</select></div>
+  <div><label for="maquinaId">Máquina</label><select id="maquinaId" name="maquinaId"><option value="">Todas las máquinas</option>@foreach(var m in Model.Maquinas){<option value="@m.ID" selected="@(m.ID==Model.MaquinaID)">@m.Nombre</option>}</select></div>
+  <div><label for="fase">Etapa pendiente</label><select id="fase" name="fase"><option value="">Todas las etapas</option>@foreach(var f in Model.Fases){<option value="@f" selected="@(f==Model.Fase)">@f</option>}</select></div>
   <div><label for="desde">Desde</label><input id="desde" name="desde" type="date" value="@Model.Desde.ToString("yyyy-MM-dd")" /></div>
   <div><label for="hasta">Hasta</label><input id="hasta" name="hasta" type="date" value="@Model.Hasta.ToString("yyyy-MM-dd")" /></div>
-  <div><label for="departamento">Área</label><select id="departamento" name="departamento"><option value="">Todas las áreas</option>@foreach(var d in Model.Departamentos){<option value="@d" selected="@(d==Model.Departamento)">@d</option>}</select></div>
   <div><label for="categoria">Medición</label><select id="categoria" name="categoria"><option value="DEMORA" selected="@(Model.Categoria=="DEMORA")">Esperas y paros</option><option value="ESPERA" selected="@(Model.Categoria=="ESPERA")">Solo esperas</option><option value="PARO" selected="@(Model.Categoria=="PARO")">Solo paros</option><option value="TRABAJO" selected="@(Model.Categoria=="TRABAJO")">Trabajo en proceso</option><option value="TODOS" selected="@(Model.Categoria=="TODOS")">Todas las actividades</option></select></div>
   <div class="tdx-search"><label for="of">OF, parte o designación</label><input id="of" name="of" type="search" placeholder="Buscar una orden o parte…" value="@Model.OF" maxlength="100" /></div>
   <label class="tdx-checkbox"><input name="soloActivos" type="checkbox" value="true" checked="@Model.SoloActivos" /> Solo abiertos</label>
   <button class="tdx-btn tdx-btn-primary" type="submit"><i class="fa-solid fa-rotate"></i> Consultar</button>
   <button class="tdx-btn tdx-btn-quiet" name="descargar" value="true" type="submit" title="Descargar resumen consolidado"><i class="fa-solid fa-download"></i> CSV</button>
+  <a href="@Url.Action("Index","TiemposMuertos")" class="tdx-btn tdx-btn-quiet">Limpiar filtros</a>
  </form>
+ <aside class="tdx-data-note"><i class="fa-solid fa-compass"></i><span><b>@(Model.Enfoque=="AHORA"?"Pendientes ahora":"Histórico del periodo")</b> · @(Model.Enfoque=="AHORA"?"Solo esperas y paros abiertos, desde su inicio real, aunque comenzaron antes de esta semana.":"Incluye intervalos abiertos y atendidos dentro de las fechas elegidas.") Área: @(Model.Departamento??"Todas") · Etapa: @(Model.Fase??"Todas") · @Model.OrdenesConOF OF. Las horas corresponden a los filtros seleccionados.</span></aside>
  <div class="tdx-kpis">
-  <article class="tdx-kpi tdx-kpi-total"><span class="tdx-kpi-label">Espera y paro netos</span><div class="tdx-kpi-value">@TiemposMuertosVm.HorasTexto(total)<span>h</span></div><span class="tdx-kpi-caption">Intervalos simultáneos contados una sola vez</span><i class="fa-solid fa-stopwatch tdx-kpi-icon"></i></article>
+  <article class="tdx-kpi tdx-kpi-total"><span class="tdx-kpi-label">@(Model.Enfoque=="AHORA"?"Tiempo neto de pendientes abiertos":"Espera y paro netos")</span><div class="tdx-kpi-value">@TiemposMuertosVm.HorasTexto(total)<span>h</span></div><span class="tdx-kpi-caption">Intervalos simultáneos contados una sola vez</span><i class="fa-solid fa-stopwatch tdx-kpi-icon"></i></article>
   <article class="tdx-kpi"><span class="tdx-kpi-label"><span class="tdx-dot tdx-dot-wait"></span> Espera neta</span><div class="tdx-kpi-value">@TiemposMuertosVm.HorasTexto(Model.HorasEspera)<span>h</span></div><span class="tdx-kpi-caption">Tiempo de flujo pendiente de atención</span></article>
   <article class="tdx-kpi"><span class="tdx-kpi-label"><span class="tdx-dot tdx-dot-stop"></span> Paros registrados</span><div class="tdx-kpi-value">@TiemposMuertosVm.HorasTexto(Model.HorasParo)<span>h</span></div><span class="tdx-kpi-caption">Paros con registro operativo</span></article>
-  <article class="tdx-kpi"><span class="tdx-kpi-label">Frentes con pendientes</span><div class="tdx-kpi-value">@Model.FrentesAbiertos<span> / @Model.Frentes.Count</span></div><span class="tdx-kpi-caption">@Model.EpisodiosAbiertos etapas abiertas en las máquinas consultadas</span></article>
+  <article class="tdx-kpi"><span class="tdx-kpi-label">OF con pendientes</span><div class="tdx-kpi-value">@Model.OrdenesAbiertas<span> / @Model.OrdenesConOF</span></div><span class="tdx-kpi-caption">OF que requieren atención en la consulta</span></article>
  </div>
  @if(Model.DatosSinCierre>0){<aside class="tdx-data-note"><i class="fa-solid fa-circle-info"></i> @Model.DatosSinCierre tareas confirmadas no tienen hora de cierre registrada. No se muestran como esperas abiertas ni se estiman sus horas finales.</aside>}
  <div class="tdx-chart-grid">
@@ -51,39 +56,49 @@
    <div class="tdx-legend"><span><i class="tdx-dot tdx-dot-wait"></i> Espera</span><span><i class="tdx-dot tdx-dot-stop"></i> Paro</span></div>
   </article>
   <article class="tdx-card">
-   <div class="tdx-card-heading"><div><h2>Evolución diaria</h2><p>Horas netas por día · @Model.Desde.ToString("dd MMM") — @Model.Hasta.ToString("dd MMM yyyy")</p></div><span class="tdx-pill">Sin duplicados</span></div>
+   <div class="tdx-card-heading"><div><h2>@(Model.Enfoque=="AHORA"?"Estado de la consulta":"Evolución diaria")</h2><p>Horas netas por día · @Model.Desde.ToString("dd MMM") — @Model.Hasta.ToString("dd MMM yyyy")</p></div><span class="tdx-pill">Sin duplicados</span></div>
+   @if(Model.Enfoque=="AHORA"){
+    <div class="tdx-empty"><i class="fa-solid fa-clock"></i><span>Esta consulta muestra pendientes abiertos al @Model.Actualizado.ToString("dd/MM HH:mm"). Cambia a Histórico del periodo para comparar días.</span></div>
+   }
+   @if(Model.Enfoque!="AHORA"){
    <div class="tdx-daily-scroll"><div class="tdx-daily" style="--tdx-days:@Model.Dias.Count" role="img" aria-label="Evolución diaria de horas de espera y paro">
    @foreach(var d in Model.Dias){<div class="tdx-day"><span class="tdx-day-value">@TiemposMuertosVm.HorasTexto(d.Horas)</span><div class="tdx-day-track"><span style="height:@Num(d.Horas/mayorDia*100)%" title="@d.Fecha.ToString("dd/MM/yyyy"): @TiemposMuertosVm.HorasTexto(d.Horas) h"></span></div><span class="tdx-day-label">@d.Fecha.ToString("dd/MM")</span></div>}
    </div></div>
+   }
    <div class="tdx-insight">@if(areaPrincipal!=null){<i class="fa-solid fa-chart-simple"></i><span><b>@areaPrincipal.Nombre</b> concentra @((areaPrincipal.Horas/Math.Max(total,0.0001)*100).ToString("0"))% del tiempo neto consultado.</span>}else{<span>Selecciona otro periodo para comparar el flujo.</span>}</div>
   </article>
  </div>
- <article class="tdx-card tdx-machines">
-  <div class="tdx-card-heading"><div><h2>Máquinas y frentes de atención</h2><p>Un resumen por equipo. Despliega el detalle para ver las etapas y OF involucradas.</p></div><span class="tdx-pill">@Model.Frentes.Count frentes</span></div>
-  @if(Model.Frentes.Count==0){<div class="tdx-empty"><i class="fa-solid fa-magnifying-glass"></i><span>No se encontraron intervalos con estos filtros.</span></div>}
-  @foreach(var frente in Model.Frentes){
-   var abiertas=frente.Episodios.Where(x=>x.Abierto&&x.Categoria!="TRABAJO").ToList();
-   var trabajando=frente.Episodios.Any(x=>x.Abierto&&x.Categoria=="TRABAJO");
-   var estado=abiertas.Count>0?"Pendiente":trabajando?"En proceso":"Atendido";
-   <details class="tdx-machine">
-    <summary><span class="tdx-machine-name"><span class="tdx-machine-icon"><i class="fa-solid fa-industry"></i></span><span><b>@frente.Maquina</b><small>@frente.Ordenes.Count() OF · @frente.Episodios.Count etapas</small></span></span>
-     <span class="tdx-machine-task"><span class="tdx-status @(abiertas.Count>0?"tdx-status-wait":trabajando?"tdx-status-work":"tdx-status-done")">@estado</span><small>@(abiertas.Count>0?string.Join(" · ",abiertas.Select(x=>x.Fase).Distinct()):trabajando?"Actividad operativa en curso":"Sin pendientes abiertos en la consulta")</small></span>
-     <span class="tdx-machine-hours"><b>@TiemposMuertosVm.HorasTexto(frente.HorasNetas) h</b><small>Espera @TiemposMuertosVm.HorasTexto(frente.HorasEspera) · Paro @TiemposMuertosVm.HorasTexto(frente.HorasParo)</small><span class="tdx-mini-track"><i style="width:@Num(frente.HorasNetas/maxHoras*100)%"></i></span></span><i class="fa-solid fa-chevron-down tdx-chevron"></i>
+ @* NSQ_TIEMPOS_POR_OF_V2_2 *@
+ <details class="tdx-card tdx-orders" data-tdx-orders>
+  <summary class="tdx-orders-toggle">
+   <span class="tdx-orders-title"><i class="fa-solid fa-file-lines" aria-hidden="true"></i><span><b>Ver detalle por OF</b><small>Consulta dónde está detenida cada orden y qué área debe atenderla.</small></span></span>
+   <span class="tdx-orders-count">@Model.OrdenesConOF OF <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+  </summary>
+  <div class="tdx-orders-content">
+  @if(Model.OrdenesTrabajo.Count==0){<div class="tdx-empty"><i class="fa-solid fa-magnifying-glass"></i><span>No se encontraron órdenes con estos filtros.</span></div>}
+  @foreach(var orden in Model.OrdenesTrabajo){
+   var abiertas=orden.Episodios.Where(x=>x.Abierto&&x.Categoria!="TRABAJO").ToList();
+   var estado=orden.TienePendientes?"Pendiente":orden.EnProceso?"En proceso":"Atendida";
+   <details class="tdx-machine tdx-order">
+    <summary><span class="tdx-machine-name"><span class="tdx-machine-icon"><i class="fa-solid fa-file-lines"></i></span><span><b>@orden.Titulo</b><small>@string.Join(" / ",orden.Partes)</small><small>@string.Join(" / ",orden.Maquinas) · @orden.Episodios.Count etapas</small></span></span>
+     <span class="tdx-machine-task"><span class="tdx-status @(orden.TienePendientes?"tdx-status-wait":orden.EnProceso?"tdx-status-work":"tdx-status-done")">@estado</span><small>@(orden.TienePendientes?string.Join(" · ",orden.AreasPendientes)+" · "+string.Join(" / ",abiertas.Select(x=>x.Fase).Distinct()):orden.EnProceso?"Actividad operativa en curso":"Sin pendientes abiertos en la consulta")</small></span>
+     <span class="tdx-machine-hours"><b>@TiemposMuertosVm.HorasTexto(orden.HorasNetas) h</b><small>Espera @TiemposMuertosVm.HorasTexto(orden.HorasEspera) · Paro @TiemposMuertosVm.HorasTexto(orden.HorasParo)</small><span class="tdx-mini-track"><i style="width:@Num(orden.HorasNetas/maxHoras*100)%"></i></span></span><i class="fa-solid fa-chevron-down tdx-chevron"></i>
     </summary>
     <div class="tdx-machine-detail">
-     <div class="tdx-of-chips">@foreach(var orden in frente.Ordenes){<span>@orden</span>}</div>
-     <div class="tdx-detail-scroll"><table class="tdx-detail-table"><thead><tr><th>Área / etapa</th><th>Tipo</th><th>Inicio real</th><th>Cierre real</th><th>Tiempo en el periodo</th></tr></thead><tbody>
-     @foreach(var episodio in frente.Episodios){
+     <div class="tdx-of-chips">@foreach(var parte in orden.Partes){<span>@parte</span>}</div>
+     <div class="tdx-detail-scroll"><table class="tdx-detail-table"><thead><tr><th>Área / etapa / máquina</th><th>Tipo</th><th>Inicio real</th><th>Cierre real</th><th>Tiempo de esta OF</th></tr></thead><tbody>
+     @foreach(var episodio in orden.Episodios){
       var segundos=episodio.Horas*3600;
-      <tr><td><span class="tdx-cell-title">@episodio.Fase</span><span class="tdx-cell-sub">@episodio.Departamento · @string.Join(" / ",episodio.Ordenes)</span></td><td><span class="tdx-status @(episodio.Categoria=="PARO"?"tdx-status-stop":episodio.Categoria=="TRABAJO"?"tdx-status-work":"tdx-status-wait")">@(episodio.Categoria=="TRABAJO"?"Trabajo":episodio.Categoria=="PARO"?"Paro":"Espera")</span></td><td>@episodio.InicioReal.ToString("dd/MM HH:mm")</td><td>@(episodio.FinReal.HasValue?episodio.FinReal.Value.ToString("dd/MM HH:mm"):"Abierto")</td><td><span class="tdx-clock" data-tdx-seconds="@Num(segundos)" data-tdx-active="@(episodio.Abierto&&Model.EsPeriodoActual?"1":"0")" data-tdx-max="@Num(Math.Max(0,(Model.Hasta.AddDays(1)-episodio.InicioPeriodo).TotalSeconds))">@TiemposMuertosVm.Duracion(episodio.Horas)</span></td></tr>
-      <tr class="tdx-trace-row"><td colspan="5"><details class="tdx-trace"><summary>Ver partes y registros de esta etapa (@episodio.Registros.Count)</summary>@foreach(var registro in episodio.Registros){<div><span class="tdx-cell-title">@registro.NumeroParte · @registro.Designacion</span><span class="tdx-cell-sub">@registro.NumeroOF · @registro.Tarea</span>@if(!string.IsNullOrWhiteSpace(registro.Motivo)){<p>@registro.Motivo</p>}</div>}</details></td></tr>
+      <tr><td><span class="tdx-cell-title">@episodio.Fase</span><span class="tdx-cell-sub">@episodio.Departamento · @episodio.Maquina</span></td><td><span class="tdx-status @(episodio.Categoria=="PARO"?"tdx-status-stop":episodio.Categoria=="TRABAJO"?"tdx-status-work":"tdx-status-wait")">@(episodio.Categoria=="TRABAJO"?"Trabajo":episodio.Categoria=="PARO"?"Paro":"Espera")</span></td><td>@episodio.InicioReal.ToString("dd/MM HH:mm")</td><td>@(episodio.FinReal.HasValue?episodio.FinReal.Value.ToString("dd/MM HH:mm"):"Abierto")</td><td><span class="tdx-clock" data-tdx-seconds="@Num(segundos)" data-tdx-active="@(episodio.Abierto&&Model.EsPeriodoActual?"1":"0")" data-tdx-max="@Num(Math.Max(0,(Model.Hasta.AddDays(1)-episodio.InicioPeriodo).TotalSeconds))">@TiemposMuertosVm.Duracion(episodio.Horas)</span></td></tr>
+      <tr class="tdx-trace-row"><td colspan="5"><details class="tdx-trace"><summary>Ver partes y registros de esta etapa (@episodio.Registros.Count)</summary>@foreach(var registro in episodio.Registros){<div><span class="tdx-cell-title">@registro.NumeroParte · @registro.Designacion</span><span class="tdx-cell-sub">Programa @registro.ProgramaID · @registro.Tarea</span>@if(!string.IsNullOrWhiteSpace(registro.Motivo)){<p>@registro.Motivo</p>}</div>}</details></td></tr>
      }
      </tbody></table></div>
     </div>
    </details>
   }
- </article>
- <details class="tdx-method"><summary>Cómo leer estos indicadores</summary><p>Las horas se recortan al periodo elegido y se unen por máquina. Una hora con varias OF o tareas simultáneas cuenta una sola vez. Si un paro coincide con una espera, se clasifica como paro. Las áreas que coinciden comparten el grupo “Áreas simultáneas”, por eso las barras suman el total neto.</p><p>La espera de flujo puede comenzar antes del arranque de la máquina; no representa por sí sola una avería ni toda la capacidad perdida. El secado y la validación en curso son trabajo, y no se suman a espera o paro. Los tiempos de cada etapa pueden coincidir: consulta el total consolidado del equipo para evitar sumarlos.</p><p>Los indicadores y estados corresponden a la última consulta; los relojes abiertos avanzan en pantalla. Pulsa Consultar para actualizar los estados. @Model.RegistrosConsolidados registros se agruparon dentro de etapas coincidentes.</p></details>
+  </div>
+ </details>
+ <details class="tdx-method"><summary>Cómo leer estos indicadores</summary><p>Las horas se recortan al periodo elegido y se unen por máquina. Una hora con varias OF o tareas simultáneas cuenta una sola vez. Si un paro coincide con una espera, se clasifica como paro. Las áreas que coinciden comparten el grupo “Áreas simultáneas”, por eso las barras suman el total neto.</p><p>La espera de flujo puede comenzar antes del arranque de la máquina; no representa por sí sola una avería ni toda la capacidad perdida. El secado y la validación en curso son trabajo, y no se suman a espera o paro. Cada OF conserva sólo sus registros. Las horas de sus etapas se consolidan por equipo. Si varias OF comparten una espera, sus tiempos pueden coincidir: el resumen general une esos intervalos una sola vez y no se obtiene sumando las tarjetas de OF.</p><p>Los indicadores y estados corresponden a la última consulta; los relojes abiertos avanzan en pantalla. Pulsa Consultar para actualizar los estados. @Model.RegistrosConsolidados registros se agruparon dentro de etapas coincidentes.</p></details>
  <footer class="tdx-footer"><span>NS QUELL · DIRECCIÓN</span><span>@Model.Desde.ToString("dd/MM/yyyy") — @Model.Hasta.ToString("dd/MM/yyyy") · Actualizado @Model.Actualizado.ToString("dd/MM/yyyy HH:mm:ss")</span></footer>
 </section>
 @section Scripts {

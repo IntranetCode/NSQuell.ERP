@@ -106,8 +106,13 @@ namespace ERP.NSQuell.Controllers
                             ? "ESPERANDO_ALMACEN"
                             : "NO_APLICA";
 
+            var purgas = tipoCanonico == ProduccionRecepcionMaterialTipo.MP
+                ? await CargarPurgasOperativasAsync(programaProduccionId, cn)
+                : new List<object>();
+
             return Json(new
             {
+                purgas,
                 ok = true,
                 programaProduccionId,
                 tipo = tipoCanonico,

@@ -34,14 +34,24 @@ namespace ERP.NSQuell.Controllers
         // ============================================================
 
         [HttpGet]
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(bool historial = false)
         {
             var modelo = new EscalaVM.IndexVM
             {
-                PuedeAdministrar = await PuedeGestionarOperadoresRRHHV1Async()
+                PuedeAdministrar = await PuedeGestionarOperadoresRRHHV1Async(),
+                EsHistorial = historial
             };
 
+            // NSQ_RH_ARRASTRE_HISTORIAL_V1_0: cuatro semanas distintas, no cuatro filas.
             const string sql = @"
+;WITH SemanasRecientes AS
+(
+    SELECT TOP (4) Anio, NumeroSemana
+    FROM dbo.RRHH_EscalasPersonal
+    WHERE Activo = 1
+    GROUP BY Anio, NumeroSemana
+    ORDER BY Anio DESC, NumeroSemana DESC
+)
 SELECT
     e.EscalaID,
     e.Folio,
@@ -88,12 +98,18 @@ INNER JOIN dbo.Usuarios ue
 LEFT JOIN dbo.Usuarios up
     ON up.UsuarioID = e.PublicadoPor
 WHERE e.Activo = 1
+  AND (
+      (@Historial = 0 AND EXISTS (SELECT 1 FROM SemanasRecientes sr WHERE sr.Anio = e.Anio AND sr.NumeroSemana = e.NumeroSemana))
+      OR
+      (@Historial = 1 AND NOT EXISTS (SELECT 1 FROM SemanasRecientes sr WHERE sr.Anio = e.Anio AND sr.NumeroSemana = e.NumeroSemana))
+  )
 ORDER BY e.Anio DESC, e.NumeroSemana DESC, e.EscalaID DESC;";
 
             await using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
 
             await using var command = new SqlCommand(sql, connection);
+            command.Parameters.Add("@Historial", SqlDbType.Bit).Value = historial;
             await using var reader = await command.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
@@ -112,8 +128,11 @@ ORDER BY e.Anio DESC, e.NumeroSemana DESC, e.EscalaID DESC;";
             modelo.EscalaSemanaActual = modelo.Escalas.FirstOrDefault(
                 x => x.FechaInicio.Date <= hoy && x.FechaFin.Date >= hoy);
 
-            return View(modelo);
+            return View("Index", modelo);
         }
+
+        [HttpGet]
+        public Task<IActionResult> Historial() => Index(historial: true);
 
         [HttpGet]
         public async Task<IActionResult> Detalle(int id)
@@ -393,7 +412,6 @@ VALUES
                 Novedades = await ObtenerNovedadesAsync(id),
                 Personas = await ObtenerPersonasOperadoresRRHHV1Async(),
                 Funciones = await ObtenerFuncionesOperadorRRHHV1Async(),
-                Maquinas = await ObtenerMaquinasAsync(),
                 PuedeEditar = escala.Estado == EscalaVM.Estados.Borrador,
                 PuedePublicar =
                     escala.Estado == EscalaVM.Estados.Borrador

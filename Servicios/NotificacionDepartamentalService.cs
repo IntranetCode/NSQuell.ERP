@@ -370,9 +370,8 @@ ORDER BY
             fechaEvento: DateTime.Now,
             eventoUnico: false,
             // NSQ_NOTIFICACIONES_DEPARTAMENTO_ADMIN_CORREO_REAL_V12
-            // El usuario pidio que toda notificacion departamental tambien
-            // llegue por correo a los destinatarios reales.
-            enviarCorreo: true);
+            // NSQ_CORREOS_ACCIONABLES_V2_0: un POST rutinario conserva solo el aviso interno.
+            enviarCorreo: false);
     }
 
     private async Task PublicarMovimientoMpAsync(
@@ -1213,7 +1212,7 @@ END;
             // El navbar conserva cobertura amplia, pero el correo real se reserva
             // para eventos detallados/accionables. El fallback generico no debe
             // llenar los buzones por cada POST exitoso del ERP.
-            if (!enviarCorreo)
+            if (!enviarCorreo || !codigoEvento.Contains("REPROGRAM", StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogInformation(
                     "Correo omitido para evento generico {CodigoEvento}; la notificacion interna si fue publicada.",
@@ -1232,7 +1231,7 @@ END;
                 codigoEvento,
                 area);
 
-            if (_correoQueue.TryEnqueue(trabajoCorreo))
+            if (await _correoQueue.EnqueueAsync(trabajoCorreo))
             {
                 _logger.LogInformation(
                     "Correo {CodigoEvento} encolado para {Usuarios} usuario(s).",

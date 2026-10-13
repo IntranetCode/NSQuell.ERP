@@ -11,11 +11,20 @@ public sealed class TiemposMuertosVm
     public string? Categoria { get; set; } = "DEMORA";
     public string? OF { get; set; }
     public bool SoloActivos { get; set; }
+    public string Enfoque { get; set; } = "AHORA";
+    public int? MaquinaID { get; set; }
+    public string? Fase { get; set; }
+    public List<(int ID,string Nombre)> Maquinas { get; set; } = new();
+    public List<string> Fases { get; set; } = new();
     public int DatosSinCierre { get; set; }
     public List<string> Departamentos { get; set; } = new();
     public List<TiempoDepartamentoFila> Filas { get; set; } = new();
     public List<TiempoEpisodioVm> Episodios { get; private set; } = new();
     public List<TiempoFrenteVm> Frentes { get; private set; } = new();
+    public List<TiempoOrdenVm> OrdenesTrabajo { get; private set; } = new();
+    public int OrdenesConOF => OrdenesTrabajo.Count(x => x.TieneOF);
+    public int OrdenesAbiertas => OrdenesTrabajo.Count(x => x.TieneOF && x.TienePendientes);
+
     public List<TiempoAreaVm> Areas { get; private set; } = new();
     public List<TiempoDiaVm> Dias { get; private set; } = new();
     public double HorasEspera { get; private set; }
@@ -36,20 +45,20 @@ public sealed class TiemposMuertosVm
     {
         Filas = Filas.GroupBy(x => (x.Origen, x.RegistroID, x.ProgramaID, x.Categoria)).Select(x => x.First()).ToList();
         Episodios.Clear(); Frentes.Clear(); Areas.Clear(); Dias.Clear(); HorasEspera = 0; HorasParo = 0;
-        foreach (var grupo in Filas.GroupBy(x => (x.Recurso, x.Departamento, x.Fase, x.Categoria)))
-        {
-            TiempoEpisodioVm? actual = null;
-            foreach (var fila in grupo.OrderBy(x => x.InicioPeriodo).ThenBy(x => x.FinPeriodo))
+        Episodios = AgruparEtapas(Filas);
+        // NSQ_TIEMPOS_POR_OF_V2_2: partir de registros propios, antes de unir otras OF.
+        OrdenesTrabajo = Filas.GroupBy(x => ClaveOrden(x), StringComparer.OrdinalIgnoreCase)
+            .Select(g => new TiempoOrdenVm
             {
-                if (actual == null || fila.InicioPeriodo > actual.FinPeriodo)
-                {
-                    actual = new TiempoEpisodioVm { Recurso = fila.Recurso, Maquina = fila.Maquina, Departamento = fila.Departamento, Fase = fila.Fase, Categoria = fila.Categoria, InicioPeriodo = fila.InicioPeriodo, FinPeriodo = fila.FinPeriodo };
-                    Episodios.Add(actual);
-                }
-                else if (fila.FinPeriodo > actual.FinPeriodo) actual.FinPeriodo = fila.FinPeriodo;
-                actual.Registros.Add(fila);
-            }
-        }
+                Clave = g.Key,
+                NumeroOF = EsNumeroOF(g.First().NumeroOF) ? g.First().NumeroOF.Trim() : string.Empty,
+                ProgramaSinOF = g.First().ProgramaID,
+                Registros = g.ToList(),
+                Episodios = AgruparEtapas(g)
+            })
+            .OrderByDescending(x => x.TieneOF).ThenByDescending(x => x.TienePendientes)
+            .ThenByDescending(x => x.HorasNetas).ThenBy(x => x.Titulo)
+            .ToList();
         foreach (var grupo in Episodios.GroupBy(x => x.Recurso))
         {
             var frente = new TiempoFrenteVm { Recurso = grupo.Key, Maquina = grupo.First().Maquina, Episodios = grupo.OrderByDescending(x => x.Abierto).ThenByDescending(x => x.Horas).ToList() };
@@ -78,7 +87,7 @@ public sealed class TiemposMuertosVm
             }
         }
         Areas = areas.Values.OrderByDescending(x => x.Horas).ToList();
-        for (var dia = Desde.Date; dia <= Hasta.Date; dia = dia.AddDays(1))
+        for (var dia = Desde.Date; Enfoque != "AHORA" && dia <= Hasta.Date; dia = dia.AddDays(1))
         {
             var datos = new TiempoDiaVm { Fecha = dia };
             foreach (var grupo in Filas.Where(x => x.Categoria is "ESPERA" or "PARO").GroupBy(x => x.Recurso))
@@ -89,6 +98,34 @@ public sealed class TiemposMuertosVm
         }
         Frentes = Frentes.OrderByDescending(x => x.Episodios.Any(e => e.Abierto && e.Categoria != "TRABAJO")).ThenByDescending(x => x.HorasNetas).ThenBy(x => x.Maquina).ToList();
     }
+    private static bool EsNumeroOF(string? numero) =>
+        !string.IsNullOrWhiteSpace(numero) &&
+        !string.Equals(numero.Trim(), "Sin OF", StringComparison.OrdinalIgnoreCase);
+
+    private static string ClaveOrden(TiempoDepartamentoFila fila) => EsNumeroOF(fila.NumeroOF)
+        ? "OF:" + fila.NumeroOF.Trim() : "PROGRAMA:" + fila.ProgramaID;
+
+    private static List<TiempoEpisodioVm> AgruparEtapas(IEnumerable<TiempoDepartamentoFila> filas)
+    {
+        var episodios = new List<TiempoEpisodioVm>();
+        foreach (var grupo in filas.GroupBy(x => (x.Recurso, x.Departamento, x.Fase, x.Categoria)))
+        {
+            TiempoEpisodioVm? actual = null;
+            foreach (var fila in grupo.OrderBy(x => x.InicioPeriodo).ThenBy(x => x.FinPeriodo))
+            {
+                if (actual == null || fila.InicioPeriodo > actual.FinPeriodo)
+                {
+                    actual = new TiempoEpisodioVm { Recurso = fila.Recurso, Maquina = fila.Maquina, Departamento = fila.Departamento, Fase = fila.Fase, Categoria = fila.Categoria, InicioPeriodo = fila.InicioPeriodo, FinPeriodo = fila.FinPeriodo };
+                    episodios.Add(actual);
+                }
+                else if (fila.FinPeriodo > actual.FinPeriodo) actual.FinPeriodo = fila.FinPeriodo;
+                actual.Registros.Add(fila);
+            }
+        }
+        return episodios.OrderByDescending(x => x.Abierto).ThenByDescending(x => x.Horas)
+            .ThenBy(x => x.Maquina).ToList();
+    }
+
     public static double HorasUnidas(IEnumerable<(DateTime Inicio, DateTime Fin)> intervalos)
     {
         DateTime? inicio = null; DateTime fin = default; double horas = 0;
@@ -162,4 +199,30 @@ public sealed class TiempoDiaVm
 {
     public DateTime Fecha { get; set; }
     public double Horas { get; set; }
+}
+
+
+// Una OF puede tener varios programas y equipos; conserva el vínculo de cada registro.
+public sealed class TiempoOrdenVm
+{
+    public string Clave { get; set; } = "";
+    public string NumeroOF { get; set; } = "";
+    public int ProgramaSinOF { get; set; }
+    public List<TiempoDepartamentoFila> Registros { get; set; } = new();
+    public List<TiempoEpisodioVm> Episodios { get; set; } = new();
+    public bool TieneOF => !string.IsNullOrWhiteSpace(NumeroOF);
+    public string Titulo => TieneOF ? NumeroOF : $"Sin OF · Programa {ProgramaSinOF}";
+    public bool TienePendientes => Episodios.Any(x => x.Abierto && x.Categoria != "TRABAJO");
+    public bool EnProceso => Episodios.Any(x => x.Abierto && x.Categoria == "TRABAJO");
+    public IEnumerable<string> Maquinas => Registros.Select(x => x.Maquina).Distinct().OrderBy(x => x);
+    public IEnumerable<string> Partes => Registros.Select(x => string.Join(" · ",
+        new[] { x.NumeroParte, x.Designacion }.Where(v => !string.IsNullOrWhiteSpace(v))))
+        .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
+    public IEnumerable<string> AreasPendientes => Episodios.Where(x => x.Abierto && x.Categoria != "TRABAJO")
+        .Select(x => x.Departamento).Distinct().OrderBy(x => x);
+    public double HorasNetas => Episodios.Where(x => x.Categoria != "TRABAJO").GroupBy(x => x.Recurso)
+        .Sum(g => TiemposMuertosVm.HorasUnidas(g.Select(x => (x.InicioPeriodo, x.FinPeriodo))));
+    public double HorasParo => Episodios.Where(x => x.Categoria == "PARO").GroupBy(x => x.Recurso)
+        .Sum(g => TiemposMuertosVm.HorasUnidas(g.Select(x => (x.InicioPeriodo, x.FinPeriodo))));
+    public double HorasEspera => Math.Max(0, HorasNetas - HorasParo);
 }

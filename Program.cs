@@ -119,6 +119,7 @@ builder.Services.AddScoped<NotificacionCorreoErpService>();
 // El SMTP no debe bloquear los POST/PUT/PATCH/DELETE del ERP.
 builder.Services.AddSingleton<ICorreoErpBackgroundQueue, CorreoErpBackgroundQueue>();
 builder.Services.AddHostedService<CorreoErpBackgroundWorker>();
+builder.Services.AddHostedService<ProduccionRecepcionCorreoWorker>();
 builder.Services.AddScoped<ProduccionBloqueoCorreoService>();
 builder.Services.AddHostedService<ProduccionBloqueoCorreoHostedService>();
 // NSQ_ALERTAS_STOCK_MP_V1_0

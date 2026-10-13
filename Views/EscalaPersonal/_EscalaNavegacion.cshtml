@@ -3,6 +3,7 @@
     var action = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
     var esProgramacion =
         action == "Index" ||
+        action == "Historial" ||
         action == "Crear" ||
         action == "Editor" ||
         action == "Novedades" ||
@@ -59,7 +60,7 @@
             <div class="escala-ux-flow-head">
                 <p class="escala-ux-flow-title">Flujo semanal para operadores</p>
                 <p class="escala-ux-flow-note">
-                    RH define quién trabaja y en qué horario. Producción/Planeación usa esa disponibilidad y conserva la máquina como preferencia editable.
+                    RH define quién trabaja y en qué horario. Producción y Planeación asignan las máquinas según esa disponibilidad.
                 </p>
             </div>
 
@@ -70,7 +71,7 @@
                 </div>
                 <div class="escala-ux-step @(paso == 2 ? "is-active" : "")">
                     <span class="eux-number">2</span>
-                    <span><strong>Asignar operadores</strong><small>Horario y máquina preferente opcional.</small></span>
+                    <span><strong>Asignar operadores</strong><small>Arrastra el personal a su horario semanal.</small></span>
                 </div>
                 <div class="escala-ux-step @(paso == 3 ? "is-active" : "")">
                     <span class="eux-number">3</span>

@@ -407,28 +407,69 @@ namespace ERP.NSQuell.Models
             !TieneProcesoCalidad &&
             !YaProducido;
 
+        // NSQ_CALENDARIOS_ESTADO_COMPARTIDO_V1_0
+        // FechaFinReal también se usa al interrumpir: por sí sola no implica liberación.
+        public bool ProduccionFinalizada =>
+            FechaLiberacionMaquina.HasValue ||
+            EstatusProduccionID == ProduccionEstatus.TerminadoParcial ||
+            EstatusProduccionID == ProduccionEstatus.Terminado ||
+            EstatusID == ProduccionEstatus.TerminadoParcial ||
+            EstatusID == ProduccionEstatus.Terminado;
+
+        public string ResolverClaseSemaforoCalendario(AgendaOperativaItemVm? operativa)
+        {
+            return operativa?.EstadoGeneral switch
+            {
+                AgendaOperativaEstadoGeneral.Pausada or
+                AgendaOperativaEstadoGeneral.InterrumpidaUrgente or
+                AgendaOperativaEstadoGeneral.Bloqueada => "bloque-paro",
+                AgendaOperativaEstadoGeneral.Reliberacion => "bloque-reliberacion",
+                AgendaOperativaEstadoGeneral.EsperandoCalidad => "bloque-calidad",
+                AgendaOperativaEstadoGeneral.Produciendo => "bloque-produciendo",
+                AgendaOperativaEstadoGeneral.MaquinaLiberada or
+                AgendaOperativaEstadoGeneral.Terminada => "bloque-producido",
+                _ => ClaseSemaforoCalendario
+            };
+        }
+
+        public string ResolverEstadoSemaforoTexto(AgendaOperativaItemVm? operativa) =>
+            operativa?.EstadoGeneralTexto ?? EstadoSemaforoTexto;
+
         public string ClaseSemaforoCalendario
         {
             get
             {
                 if (EstatusID == ProduccionEstatus.Cancelado ||
-                    EstatusID == ProduccionEstatus.Cerrado)
-                {
+                    EstatusProduccionID == ProduccionEstatus.Cancelado)
                     return "bloque-cerrado";
-                }
 
-                if (YaProducido ||
-                    EstatusID == ProduccionEstatus.TerminadoParcial ||
-                    EstatusID == ProduccionEstatus.Terminado)
-                {
+                // Un paro activo debe conservar el rojo, incluso con una fecha de corte.
+                if (EstatusProduccionID == ProduccionEstatus.Pausado)
+                    return "bloque-paro";
+
+                // Los pendientes posteriores de Calidad no vuelven amarilla una máquina liberada.
+                if (ProduccionFinalizada)
                     return "bloque-producido";
-                }
 
-                if (EstaProduciendo || EstaPreparacionOPausado)
+                if (EstatusID == ProduccionEstatus.Cerrado ||
+                    EstatusProduccionID == ProduccionEstatus.Cerrado)
+                    return "bloque-cerrado";
+
+                if (YaProducido)
+                    return "bloque-producido";
+
+                if (RequiereReliberacion || ConfiguracionCalidadInvalidada)
+                    return "bloque-reliberacion";
+
+                if (EstaProduciendo)
                     return "bloque-produciendo";
 
-                if (TieneProcesoCalidad)
+                if (TieneProcesoCalidad && !string.IsNullOrWhiteSpace(EstadoCalidad) &&
+                    !string.Equals(EstadoCalidad.Trim(), "CERRADA", StringComparison.OrdinalIgnoreCase))
                     return "bloque-calidad";
+
+                if (EstaPreparacionOPausado)
+                    return "bloque-produciendo";
 
                 return "bloque-timeline";
             }
@@ -498,38 +539,17 @@ namespace ERP.NSQuell.Models
                 ? "Sin proceso de Calidad"
                 : EstadoCalidad.Replace("_", " ");
 
-        public string EstadoSemaforoTexto
+        public string EstadoSemaforoTexto => ClaseSemaforoCalendario switch
         {
-            get
-            {
-                if (EstatusID == ProduccionEstatus.Cancelado ||
-                    EstatusID == ProduccionEstatus.Cerrado)
-                {
-                    return "Cerrado / cancelado";
-                }
-
-                if (YaProducido ||
-                    EstatusID == ProduccionEstatus.TerminadoParcial ||
-                    EstatusID == ProduccionEstatus.Terminado)
-                {
-                    return "Ya producido";
-                }
-
-                if (EstaPreparacionOPausado)
-                    return "En preparación / pausado";
-
-                if (EstaProduciendo)
-                    return "Produciendo";
-
-                if (TieneProcesoCalidad)
-                    return "En proceso de Calidad";
-
-                if (DentroHorarioProgramado)
-                    return "Dentro del horario planeado";
-
-                return "Timeline";
-            }
-        }
+            "bloque-cerrado" => "Cerrado / cancelado",
+            "bloque-paro" => "Pausada",
+            "bloque-producido" => FechaLiberacionMaquina.HasValue
+                ? "Máquina liberada" : ProduccionFinalizada ? "Terminada" : "Ya producido",
+            "bloque-reliberacion" => "En reliberación",
+            "bloque-calidad" => "Esperando Calidad",
+            "bloque-produciendo" => EstaProduciendo ? "En producción" : "En preparación",
+            _ => DentroHorarioProgramado ? "Dentro del horario planeado" : "Timeline"
+        };
 
         public string MotivoBloqueoMovimiento
         {

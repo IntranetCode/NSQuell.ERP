@@ -124,6 +124,7 @@ WHERE EscalaID=@EscalaID
                 return Json(new
                 {
                     ok = true,
+                    personalIDs = idsValidos.OrderBy(x => x).ToArray(),
                     mensaje = $"Se quitó el horario semanal a {idsValidos.Count} persona(s)."
                 });
             }
@@ -252,6 +253,7 @@ VALUES
             return Json(new
             {
                 ok = true,
+                personalIDs = idsValidos.OrderBy(x => x).ToArray(),
                 mensaje = $"Horario aplicado a {idsValidos.Count} persona(s)."
             });
         }
@@ -382,7 +384,7 @@ SELECT
     a.PersonalID,
     NULL,
     a.FuncionID,
-    a.MaquinaID,
+    NULL,
     turnoActual.EscalaTurnoID,
     @FechaInicio,
     @FechaFin,

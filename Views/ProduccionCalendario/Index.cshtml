@@ -1882,64 +1882,8 @@
                                 var mostrarAlertaNoInicio = bloque.MostrarAlertaNoInicio;
                                 var textoAlertaNoInicio = bloque.TextoAlertaNoInicio ?? string.Empty;
 
-                                var claseColorBloque = bloque.ClaseSemaforoCalendario;
-
-                                if (operativa != null)
-                                {
-                                    if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Pausada
-                                    || operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.InterrumpidaUrgente
-                                    || operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Bloqueada)
-                                    {
-                                        claseColorBloque = "bloque-paro";
-                                    }
-                                    else if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Reliberacion)
-                                    {
-                                        claseColorBloque = "bloque-reliberacion";
-                                    }
-                                    else if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.EsperandoCalidad)
-                                    {
-                                        claseColorBloque = "bloque-calidad";
-                                    }
-                                    else if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Produciendo)
-                                    {
-                                        claseColorBloque = "bloque-produciendo";
-                                    }
-                                    else if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.MaquinaLiberada
-                                    || operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Terminada)
-                                    {
-                                        claseColorBloque = "bloque-producido";
-                                    }
-                                }
-                                else
-                                {
-                                    var estadoCalidadNormalizado =
-                                    (bloque.EstadoCalidad ?? string.Empty)
-                                    .Trim()
-                                    .ToUpperInvariant();
-
-                                    if (bloque.EstatusProduccionID == 4)
-                                    {
-                                        claseColorBloque = "bloque-paro";
-                                    }
-                                    else if (bloque.RequiereReliberacion
-                                    || bloque.ConfiguracionCalidadInvalidada)
-                                    {
-                                        claseColorBloque = "bloque-reliberacion";
-                                    }
-                                    else if (bloque.InspeccionCalidadID.HasValue
-                                    && !string.IsNullOrWhiteSpace(estadoCalidadNormalizado)
-                                    && estadoCalidadNormalizado != "CERRADA")
-                                    {
-                                        claseColorBloque = "bloque-calidad";
-                                    }
-                                    else if (bloque.EstatusProduccionID == 3)
-                                    {
-                                        claseColorBloque = "bloque-produciendo";
-                                    }
-                                }
-
-                                var estadoOperativoTexto = operativa?.EstadoGeneralTexto
-                                ?? bloque.EstadoSemaforoTexto;
+                                var claseColorBloque = bloque.ResolverClaseSemaforoCalendario(operativa);
+                                var estadoOperativoTexto = bloque.ResolverEstadoSemaforoTexto(operativa);
 
                                 @if (mostrarSombraAtraso && sombraWidth > 0)
                                 {

@@ -2,6 +2,9 @@
 (function(){
  'use strict';
  const panel=document.getElementById('tdx-panel');if(!panel)return;
+ const form=document.getElementById('tdx-filter'), enfoque=form?.querySelector('[name="enfoque"]');
+ function orientar(){const ahora=enfoque?.value==='AHORA';['desde','hasta','categoria','soloActivos'].forEach(name=>{const el=form?.querySelector('[name="'+name+'"]');if(el){el.disabled=ahora;el.closest('div,label')?.classList.toggle('tdx-filter-disabled',ahora);}});}
+ enfoque?.addEventListener('change',orientar);form?.querySelector('[name="departamento"]')?.addEventListener('change',()=>{const fase=form.querySelector('[name="fase"]');if(fase)fase.value='';});orientar();
  const inicio=performance.now();
  function actualizar(){
   const delta=Math.max(0,(performance.now()-inicio)/1000);

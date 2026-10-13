@@ -56,10 +56,10 @@ public sealed class ProduccionBloqueoCorreoService
 
             var seguimiento = await ObtenerSeguimientoAsync(bloqueo.Clave, cancellationToken);
 
-            if (seguimiento == null)
+            if (seguimiento == null || !seguimiento.Activo)
             {
                 // Un bloqueo interdepartamental debe avisarse en cuanto se detecta.
-                // Después de este primer aviso, la tabla durable impone intervalos de 15 minutos.
+                // Después del primer aviso confirmado, el recordatorio espera cuatro horas.
                 await CrearSeguimientoAsync(
                     bloqueo,
                     ahora,
@@ -71,6 +71,11 @@ public sealed class ProduccionBloqueoCorreoService
             if (seguimiento == null || !seguimiento.Activo || ahora < seguimiento.FechaProximoEnvio)
                 continue;
 
+            // Reserva durable: dos instancias IIS no deben enviar el mismo recordatorio a la vez.
+            await using var claimCn=new SqlConnection(_connectionString);await claimCn.OpenAsync(cancellationToken);
+            await using var claim=new SqlCommand("UPDATE dbo.NotificacionCorreoBloqueos SET FechaProximoEnvio=DATEADD(MINUTE,15,SYSDATETIME()) WHERE ClaveBloqueo=@Clave AND Activo=1 AND FechaProximoEnvio<=SYSDATETIME();",claimCn);
+            claim.Parameters.Add("@Clave",SqlDbType.NVarChar,200).Value=bloqueo.Clave;
+            if(await claim.ExecuteNonQueryAsync(cancellationToken)==0)continue;
             await EnviarRecordatorioAsync(bloqueo, ahora, cancellationToken);
         }
 
@@ -100,7 +105,7 @@ public sealed class ProduccionBloqueoCorreoService
             var transcurridos = Math.Max(0, (int)Math.Floor((ahora - bloqueo.FechaInicio).TotalMinutes));
             var mensaje =
                 $"{bloqueo.Mensaje} Tiempo acumulado del bloqueo: {transcurridos} minuto(s). " +
-                "Este correo se repetirá cada 15 minutos mientras la condición siga pendiente.";
+                "Recibirás un recordatorio como máximo cada 4 horas mientras siga pendiente.";
 
             var res = await _correoErp.EnviarAUsuariosAsync(
                 usuarios,
@@ -112,7 +117,7 @@ public sealed class ProduccionBloqueoCorreoService
                 urgente: true,
                 textoBoton: "Atender bloqueo ahora");
 
-            fechaEnvio = res.Enviados > 0 ? ahora : null;
+            fechaEnvio = res.Enviados > 0 && res.Errores == 0 ? ahora : null;
             resultadoTexto =
                 $"Encontrados={res.Encontrados}; Enviados={res.Enviados}; " +
                 $"Bloqueados={res.FiltradosPorCandados}; Errores={res.Errores}; " +
@@ -123,7 +128,7 @@ public sealed class ProduccionBloqueoCorreoService
             bloqueo.Clave,
             ahora,
             fechaEnvio,
-            ahora.AddMinutes(15),
+            fechaEnvio.HasValue ? ahora.AddHours(4) : ahora.AddMinutes(15),
             resultadoTexto,
             cancellationToken);
     }
@@ -368,6 +373,12 @@ BEGIN
         @Clave,@Codigo,N'Calidad_Inspecciones',@EntidadID,@Departamento,
         @FechaInicio,@FechaProximo,0,1,SYSDATETIME(),SYSDATETIME()
     );
+END
+ELSE
+BEGIN
+    UPDATE dbo.NotificacionCorreoBloqueos SET Activo=1,FechaResolucion=NULL,FechaInicioBloqueo=@FechaInicio,
+      FechaProximoEnvio=@FechaProximo,FechaModificacion=SYSDATETIME()
+    WHERE ClaveBloqueo=@Clave AND Activo=0;
 END;
 """;
 

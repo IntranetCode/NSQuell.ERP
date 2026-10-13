@@ -1839,8 +1839,8 @@ VALUES
                         : observacionesGuardar;
                 insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = movimiento.Referencia;
                 insert.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = !movimiento.EsPurga && model.SolicitudProduccionID.HasValue && model.SolicitudProduccionID.Value > 0 ? model.SolicitudProduccionID.Value : DBNull.Value;
-                insert.Parameters.Add("@RequiereValidacionProduccion", SqlDbType.Bit).Value = model.EsEntregaOF && !movimiento.EsPurga;
-                insert.Parameters.Add("@ValidadoProduccion", SqlDbType.Bit).Value = !model.EsEntregaOF || movimiento.EsPurga;
+                insert.Parameters.Add("@RequiereValidacionProduccion", SqlDbType.Bit).Value = model.EsEntregaOF;
+                insert.Parameters.Add("@ValidadoProduccion", SqlDbType.Bit).Value = !model.EsEntregaOF;
                 var movimientoAlmacenID = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken) ?? 0L);
                 if (movimientoAlmacenID <= 0)
                     throw new InvalidOperationException("No fue posible obtener el movimiento de materia prima registrado.");
