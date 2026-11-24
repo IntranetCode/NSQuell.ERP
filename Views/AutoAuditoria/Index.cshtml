@@ -1,0 +1,54 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration AaConfig
+@model ERP.NSQuell.Servicios.AutoAuditoria.AaPanel
+@{
+    ViewData["Title"] = "Compras · Autoauditorías";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+@section Styles {
+<style>
+.aa-shell{max-width:1440px;margin:0 auto;padding:16px 4px 40px;--aa-border:rgba(130,155,190,.25)}
+.aa-header{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:24px}.aa-header h1{font-size:clamp(25px,3vw,36px);font-weight:750;letter-spacing:-.04em;margin:4px 0}.aa-kicker{font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:#f59e0b}.aa-muted{opacity:.76;font-size:13px}.aa-test{border:1px solid #e2a332;color:#c58b16;padding:7px 14px;font-size:12px;border-radius:99px;font-weight:700}.aa-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 20px}.aa-stat,.aa-card{border:1px solid var(--aa-border);border-radius:16px;padding:20px;background:var(--surface,rgba(120,145,180,.05))}.aa-stat span{font-size:12px;opacity:.8}.aa-stat strong{display:block;font-size:32px;line-height:1.3;font-weight:750}.aa-card h2{font-size:19px;margin:0 0 8px;font-weight:700}.aa-form{display:grid;grid-template-columns:1.3fr 1fr 1fr 155px;gap:12px;align-items:end;margin-top:18px}.aa-form label{font-weight:600;font-size:12px;margin-bottom:5px;display:block}.aa-primary{background:#1c62a4;border-color:#1c62a4;color:#fff}.aa-primary:hover{background:#164d85;color:#fff}.aa-card .table{margin:0}.aa-tag{padding:5px 10px;border-radius:99px;font-weight:650;font-size:11px;white-space:nowrap;border:1px solid var(--aa-border)}.aa-green{color:#26a66c}.aa-yellow{color:#d5a42a}.aa-red{color:#e05a5a}.aa-gray{opacity:.75}.aa-ops{display:flex;gap:6px;flex-wrap:wrap}.aa-link{margin:16px 0;padding:16px;border:1px solid #2785cb;border-radius:12px}.aa-link input{font-size:12px}.aa-space{margin-top:18px}.aa-code{font-family:ui-monospace,Consolas,monospace;font-size:11px;white-space:nowrap}.aa-table td,.aa-table th{vertical-align:middle;padding:11px 8px;font-size:13px}.aa-table th{font-size:11px;text-transform:uppercase;letter-spacing:.04em}.aa-no-wrap{white-space:nowrap}
+@@media(max-width:1050px){.aa-form{grid-template-columns:1fr 1fr}.aa-grid{grid-template-columns:repeat(2,1fr)}}@@media(max-width:575px){.aa-form{grid-template-columns:1fr}.aa-stat,.aa-card{padding:14px}}
+</style>
+}
+<div class="aa-shell">
+    <div class="aa-header"><div><div class="aa-kicker">Compras · SGC / Portal de proveedores</div><h1>Autoauditorías de fabricantes</h1><div class="aa-muted">GQ-F-CP02-05 · Ver. 01 · Generación de invitaciones, resultados e historial.</div></div><div class="d-flex gap-2 align-items-center flex-wrap"><a class="btn btn-outline-primary" href="@Url.Action("Estadisticas","AutoAuditoria")"><i class="fa-solid fa-chart-column"></i> Estadísticas y accesos</a><span class="aa-test">@(string.Equals(AaConfig["AutoAuditoria:Modo"],"PROD",StringComparison.OrdinalIgnoreCase)?"PRODUCCIÓN":"ENTORNO TEST")</span></div></div>
+    <div class="aa-grid">
+        <div class="aa-stat"><span>Total de solicitudes</span><strong>@Model.Solicitudes.Count</strong></div>
+        <div class="aa-stat"><span>Pendientes</span><strong>@Model.Solicitudes.Count(x=>x.Estado=="Pendiente")</strong></div>
+        <div class="aa-stat"><span>Respondidas</span><strong class="aa-green">@Model.Solicitudes.Count(x=>x.Estado=="Respondida")</strong></div>
+        <div class="aa-stat"><span>Con puntos rojos</span><strong class="aa-red">@Model.Solicitudes.Count(x=>x.Rojo>0)</strong></div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Error)) { <div class="alert alert-danger" role="alert">@Model.Error</div> }
+    @if (!string.IsNullOrWhiteSpace(Model.Aviso)) { <div class="alert alert-success" role="status">@Model.Aviso</div> }
+    <section class="aa-card">
+        <h2>Nueva autoauditoría</h2><div class="aa-muted">Se genera el enlace y se intenta enviarlo al correo indicado. @(string.Equals(AaConfig["AutoAuditoria:Modo"],"PROD",StringComparison.OrdinalIgnoreCase)?"El envío externo depende de la habilitación del módulo.":"En TEST solo se admiten destinatarios de la lista blanca.") Puede seleccionar un proveedor activo o capturar una empresa externa.</div>
+        <form method="post" action="@Url.Action("Crear","AutoAuditoria")" class="aa-form" id="aa-create">
+            @Html.AntiForgeryToken()
+            <div><label for="aa-proveedor">Proveedor del catálogo</label><select class="form-select" id="aa-proveedor" name="proveedorId"><option value="">Empresa externa / captura manual</option>@foreach(var p in Model.Proveedores){<option value="@p.Id" data-correo="@p.Correo">@p.Nombre</option>}</select></div>
+            <div><label for="aa-empresa">Razón social (captura manual)</label><input class="form-control" id="aa-empresa" name="empresa" maxlength="250" placeholder="Nombre de la empresa" required /></div>
+            <div><label for="aa-correo">Correo del contacto</label><input class="form-control" id="aa-correo" name="correo" type="email" maxlength="150" placeholder="calidad@empresa.com" required /></div>
+            <div><label for="aa-vigencia">Vigencia</label><select class="form-select" id="aa-vigencia" name="vigencia"><option value="7">7 días</option><option value="15" selected>15 días</option><option value="30">30 días</option></select></div>
+            <div><button type="submit" class="btn aa-primary"><i class="fa-solid fa-link"></i> Generar y enviar enlace</button></div>
+        </form>
+        @if(Model.Enlace is not null){<div class="aa-link"><label for="aa-link" class="fw-semibold mb-2">Enlace privado · se muestra una sola vez</label><div class="input-group"><input class="form-control" id="aa-link" value="@Model.Enlace" readonly autocomplete="off"/><button class="btn aa-primary" type="button" id="aa-copy">Copiar</button><a class="btn btn-outline-secondary" href="@Model.Enlace" target="_blank" rel="noopener noreferrer">Abrir formulario</a></div><div class="aa-muted mt-2" id="aa-copy-status" role="status">@(string.Equals(AaConfig["AutoAuditoria:Modo"],"PROD",StringComparison.OrdinalIgnoreCase)?"Enlace de uso privado. Comparta únicamente con el destinatario autorizado.":"Invitación TEST. No enviar a proveedores reales.")</div></div>}
+    </section>
+    <section class="aa-card aa-space">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3"><div><h2>Solicitudes e historial</h2><div class="aa-muted">Los totales son por valoración. Clasificación global pendiente de validación por SGC.</div></div><input id="aa-search" class="form-control" style="max-width:260px" placeholder="Buscar empresa, folio o estado" aria-label="Buscar solicitudes"/></div>
+        <div class="table-responsive"><table class="table aa-table" id="aa-table"><thead><tr><th>Folio / Empresa</th><th>Estado</th><th>Vence (UTC)</th><th>V / A / R / n.b.</th><th>Acciones</th></tr></thead><tbody>
+        @foreach(var s in Model.Solicitudes){
+            <tr><td><div class="fw-semibold">@s.Empresa</div><span class="aa-code">@s.Folio</span><div class="aa-muted">@s.Correo</div></td><td><span class="aa-tag @(s.Estado=="Respondida"?"aa-green":s.Estado=="Vencida"?"aa-yellow":"")">@s.Estado</span></td><td class="aa-no-wrap">@s.Vence.ToString("dd/MM/yyyy HH:mm")</td><td class="aa-no-wrap"><b class="aa-green">@s.Verde</b> / <b class="aa-yellow">@s.Amarillo</b> / <b class="aa-red">@s.Rojo</b> / <b class="aa-gray">@s.Nb</b></td><td><div class="aa-ops"><a class="btn btn-sm btn-outline-secondary" href="@Url.Action("Detalle","AutoAuditoria",new{id=s.Id})">Ver detalle</a>
+            @if(s.Estado is "Pendiente" or "Vencida"){
+            <form method="post" action="@Url.Action("Renovar","AutoAuditoria")" class="aa-confirm" data-question="¿Generar y enviar otro enlace por 15 días al correo registrado? El anterior dejará de funcionar.">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@s.Id"/><input type="hidden" name="vigencia" value="15"/><button class="btn btn-sm btn-outline-primary" type="submit">Renovar y enviar</button></form>
+            <form method="post" action="@Url.Action("Revocar","AutoAuditoria")" class="aa-confirm" data-question="¿Revocar esta invitación? No podrá utilizarse nuevamente.">@Html.AntiForgeryToken()<input type="hidden" name="id" value="@s.Id"/><button class="btn btn-sm btn-outline-danger" type="submit">Revocar</button></form>}
+            </div></td></tr>
+        }
+        @if(Model.Solicitudes.Count==0){<tr><td colspan="5" class="text-center py-5 aa-muted">No hay solicitudes. Genere su primera evaluación.</td></tr>}
+        </tbody></table></div>
+    </section>
+</div>
+@section Scripts {
+<script>
+(()=>{const form=document.getElementById('aa-create');form.addEventListener('submit',ev=>{if(form.dataset.busy==='1'){ev.preventDefault();return;}form.dataset.busy='1';const b=form.querySelector('button[type=submit]');b.disabled=true;b.textContent='Generando y enviando...';});window.addEventListener('pageshow',()=>{delete form.dataset.busy;const b=form.querySelector('button[type=submit]');b.disabled=false;b.innerHTML='<i class="fa-solid fa-link"></i> Generar y enviar enlace';});const p=document.getElementById('aa-proveedor'),e=document.getElementById('aa-empresa'),c=document.getElementById('aa-correo');p.addEventListener('change',()=>{e.disabled=!!p.value;e.required=!p.value;if(p.value)c.value=p.selectedOptions[0].dataset.correo||'';});document.getElementById('aa-copy')?.addEventListener('click',async()=>{const i=document.getElementById('aa-link');i.focus();i.select();try{await navigator.clipboard.writeText(i.value);document.getElementById('aa-copy-status').textContent='Enlace copiado.';}catch{document.getElementById('aa-copy-status').textContent='Enlace seleccionado. Presione Ctrl+C.';}});document.querySelectorAll('.aa-confirm').forEach(f=>f.addEventListener('submit',ev=>{if(!confirm(f.dataset.question))ev.preventDefault()}));document.getElementById('aa-search').addEventListener('input',ev=>{const q=ev.target.value.trim().toLocaleLowerCase();document.querySelectorAll('#aa-table tbody tr').forEach(r=>r.hidden=!r.textContent.toLocaleLowerCase().includes(q));});})();
+</script>
+}

@@ -1,0 +1,24 @@
+@model ERP.NSQuell.Servicios.AutoAuditoria.AaDetalle
+@{
+    ViewData["Title"] = "Detalle de autoauditoría";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var s=Model.Solicitud;
+}
+@section Styles {
+<style>
+.aa-detail{max-width:1260px;margin:0 auto;padding:16px 4px 40px}.aa-detail h1{font-size:clamp(25px,3vw,34px);font-weight:750;letter-spacing:-.03em}.aa-dcard{border:1px solid rgba(130,155,190,.25);border-radius:16px;padding:20px;margin:18px 0;background:var(--surface,rgba(120,145,180,.05))}.aa-dcard h2{font-size:18px;font-weight:700}.aa-dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:18px 0}.aa-dgrid small{display:block;opacity:.7}.aa-dstat{border:1px solid rgba(130,155,190,.25);border-radius:12px;padding:14px}.aa-dstat strong{font-size:30px;display:block}.aa-rating{font-size:12px;font-weight:750;white-space:nowrap}.aa-VERDE{color:#27a568}.aa-AMARILLO{color:#d2a127}.aa-ROJO{color:#e05a5a}.aa-observation{white-space:pre-wrap;overflow-wrap:anywhere}.aa-dtable td,.aa-dtable th{padding:12px 8px;vertical-align:top;font-size:13px}.aa-label{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#e2a332;font-weight:700}
+@@media print{.global-navbar-host,.aa-print-hide{display:none!important}.aa-detail{color:#000;background:white}.aa-dcard{background:white}.aa-dtable{color:#000}}
+</style>
+}
+<div class="aa-detail">
+    <div class="d-flex justify-content-between flex-wrap gap-2 align-items-start"><div><div class="aa-label">GQ-F-CP02-05 · Ver. 01</div><h1>@s.Empresa</h1><div>@s.Folio · @s.Estado</div></div><div class="aa-print-hide d-flex gap-2"><a class="btn btn-outline-secondary" href="@Url.Action("Index","AutoAuditoria")">Volver</a><button type="button" class="btn btn-outline-primary" onclick="window.print()">Imprimir / PDF</button></div></div>
+    <section class="aa-dcard"><h2>Datos generales</h2><div class="aa-dgrid"><div><small>Empresa</small>@s.Empresa</div><div><small>Correo de invitación</small>@s.Correo</div><div><small>Vigencia (UTC)</small>@s.Vence.ToString("dd/MM/yyyy HH:mm")</div><div><small>Fecha de autoauditoría</small>@(Model.FechaAuditoria?.ToString("dd/MM/yyyy")??"Pendiente")</div><div><small>Responsable</small>@(string.IsNullOrEmpty(Model.Responsable)?"Pendiente":Model.Responsable)</div><div><small>Correo de respuesta</small>@(string.IsNullOrEmpty(Model.CorreoRespuesta)?"Pendiente":Model.CorreoRespuesta)</div></div><small>Dirección</small><div>@(string.IsNullOrEmpty(Model.Direccion)?"Pendiente":Model.Direccion)</div></section>
+    <div class="aa-dgrid"><div class="aa-dstat"><small>Verde</small><strong class="aa-VERDE">@s.Verde</strong></div><div class="aa-dstat"><small>Amarillo</small><strong class="aa-AMARILLO">@s.Amarillo</strong></div><div class="aa-dstat"><small>Rojo</small><strong class="aa-ROJO">@s.Rojo</strong></div><div class="aa-dstat"><small>n.b.</small><strong>@s.Nb</strong></div></div>
+    <section class="aa-dcard"><h2>Resultados por punto</h2><p class="small">Clasificación global: pendiente de definición por SGC (regla de n.b. del Excel). Las valoraciones individuales se conservan sin modificaciones.</p>
+    @if(Model.Respuestas.Count==0){<p>Sin respuestas registradas.</p>}else{<div class="table-responsive"><table class="table aa-dtable"><thead><tr><th>Punto</th><th>Requerimiento</th><th>Valoración</th><th>Puntos débiles / medidas recomendadas</th></tr></thead><tbody>@foreach(var r in Model.Respuestas){<tr><td>@r.Punto @(r.Asterisco?"*":"")</td><td>@r.Texto</td><td class="aa-rating aa-@r.Valoracion">@r.Valoracion</td><td class="aa-observation">@(string.IsNullOrEmpty(r.Observacion)?"—":r.Observacion)</td></tr>}</tbody></table></div>}
+    </section>
+    <section class="aa-dcard"><h2>Notificación de respuesta</h2><p class="small">Avisos internos a Compras y SGC. El estado ENVIADO confirma aceptación SMTP, no lectura.</p>
+    @if(Model.Avisos.Count==0){<p class="small">No hay avisos registrados. Los envíos nuevos se preparan después de guardar la respuesta; las respuestas anteriores a V4 no se notifican retroactivamente.</p>}else{<div class="table-responsive"><table class="table aa-dtable"><thead><tr><th>Destinatario</th><th>Estado</th><th>Intentos</th><th>Último intento UTC</th><th>Aceptado UTC</th></tr></thead><tbody>@foreach(var a in Model.Avisos){<tr><td>@a.Destinatario</td><td><b>@a.Estado</b></td><td>@a.Intentos</td><td>@(a.UltimoIntento?.ToString("dd/MM/yyyy HH:mm:ss")??"—")</td><td>@(a.Enviado?.ToString("dd/MM/yyyy HH:mm:ss")??"—")</td></tr>}</tbody></table></div>}
+    </section>
+    <section class="aa-dcard"><h2>Historial</h2><div class="table-responsive"><table class="table aa-dtable"><thead><tr><th>Evento</th><th>Fecha (UTC)</th><th>Usuario ID</th></tr></thead><tbody>@foreach(var e in Model.Historial){<tr><td>@e.Evento</td><td>@e.Fecha.ToString("dd/MM/yyyy HH:mm:ss")</td><td>@(e.Usuario?.ToString()??"Proveedor externo")</td></tr>}</tbody></table></div></section>
+</div>

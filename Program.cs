@@ -1,4 +1,4 @@
-﻿
+
 using ERP.NSQuell.Areas.AdminUsuarios.Interfaces;
 using ERP.NSQuell.Areas.AdminUsuarios.Services;
 using ERP.NSQuell.Controllers;
@@ -23,6 +23,17 @@ using System.Security.Claims;
 
 
 var builder = WebApplication.CreateBuilder(args);
+// NSQ_AA_TEST_V1_BOOTSTRAP: isolated TEST process; never maps internal ERP routes.
+if (string.Equals(Environment.GetEnvironmentVariable("NSQ_AA_DIAGNOSTICO"), "1", StringComparison.Ordinal))
+{
+    await ERP.NSQuell.Servicios.AutoAuditoria.AutoAuditoriaPublica.DiagnosticarAsync(builder);
+    return;
+}
+if (string.Equals(Environment.GetEnvironmentVariable("NSQ_AUTOAUDITORIA_PUBLICA"), "1", StringComparison.Ordinal))
+{
+    await ERP.NSQuell.Servicios.AutoAuditoria.AutoAuditoriaPublica.RunAsync(builder);
+    return;
+}
 
 // ? AGREGAR ESTAS LÃNEAS PARA ARCHIVOS GRANDES
 builder.Services.Configure<FormOptions>(options =>
@@ -176,6 +187,9 @@ builder.Services.AddSignalR();
 
 builder.Services.AddScoped<IServicioAcceso, ServicioAcceso>();
 
+
+// NSQ_AA_V4_NOTIFICACIONES: solo proceso interno ERP.
+builder.Services.AddHostedService<ERP.NSQuell.Servicios.AutoAuditoria.AaAvisosRespuestaWorker>();
 
 var app = builder.Build();
 // Activa el motor de creaciÃ³n de PDFs de Rotativa

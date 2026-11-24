@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using ERP.NSQuell.Models.Opciones;
 using Microsoft.Extensions.Options;
 using MailKit.Net.Smtp;
@@ -565,6 +565,88 @@ WHERE u.UsuarioID IN ({string.Join(",", paramNames)})
         // NSQ_NOTIFICACIONES_DEPARTAMENTALES_V1_1
         // Permite a servicios internos enviar asunto/cuerpo personalizados.
         // El candado PuedeEnviarA sigue aplicándose dentro del método privado.
+        // NSQ_AA_EMAIL_TEST_V3 / NSQ_AA_EMAIL_TEST_V4 / NSQ_AA_EMAIL_PROD_V6: direct external invitation, only to a permitted TEST recipient.
+        // The existing legacy EnviarCorreoDirectoAsync returns void and swallows SMTP errors.
+        public async Task<string> EnviarInvitacionAutoAuditoriaTestAsync(string para, string asunto, string html, bool avisoInterno = false, bool produccion = false)
+        {
+            if (!_correoOpt.Habilitado || (produccion && !_env.IsProduction())) return "CORREO_BLOQUEADO";
+            // TEST conserva la lista blanca. PROD requiere modo validado y habilitacion expresa
+            // en el controlador; solo este modulo permite destinatarios externos.
+            var allowed = (_correoOpt.ListaBlanca ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(x => string.Equals(x, para, StringComparison.OrdinalIgnoreCase));
+            // Only the two explicitly authorized internal addresses can receive response notices in TEST.
+            // This does not alter the global whitelist, nor the invitation restrictions.
+            if (avisoInterno)
+            {
+                if (!string.Equals(para, "compras.gq@nsquell.com.mx", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(para, "sgc.gq@nsquell.com.mx", StringComparison.OrdinalIgnoreCase))
+                    return "CORREO_BLOQUEADO";
+            }
+            else if (!produccion && (!allowed || !PuedeEnviarA(para))) return "CORREO_BLOQUEADO";
+            if (string.IsNullOrWhiteSpace(_correoOpt.SmtpHost)) return "CORREO_FALTA_HOST";
+            if (string.IsNullOrWhiteSpace(_correoOpt.Remitente)) return "CORREO_FALTA_FROM";
+            if (!string.IsNullOrWhiteSpace(_correoOpt.Usuario) && string.IsNullOrWhiteSpace(_correoOpt.Contrasena)) return "CORREO_FALTA_PASS";
+            bool accepted = false, sending = false;
+            try
+            {
+                var msg = new MimeMessage();
+                msg.From.Add(new MailboxAddress(_correoOpt.NombreRemitente ?? "", _correoOpt.Remitente));
+                msg.To.Add(MailboxAddress.Parse(para));
+                msg.Subject = asunto;
+                var body = new BodyBuilder { HtmlBody = html };
+                // Embedded at build: IIS need not serve or download the image.
+                using var logoStream = typeof(ServicioNotificaciones).Assembly.GetManifestResourceStream("NSQ.AutoAuditoria.Logo.png");
+                if(logoStream != null)
+                {
+                    var recurso = body.LinkedResources.Add("logo-quell.png",logoStream,new MimeKit.ContentType("image","png"));
+                    recurso.ContentId = "nsq-aa-logo@nsquell.com.mx";
+                }
+                else
+                {
+                    _logger.LogWarning("Autoauditoria: logo no disponible; se conserva el encabezado de texto.");
+                    body.HtmlBody = System.Text.RegularExpressions.Regex.Replace(html,"<img\\s+[^>]*src=\"cid:nsq-aa-logo@nsquell\\.com\\.mx\"[^>]*>","",System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                }
+                msg.Body = body.ToMessageBody();
+                using var smtp = new SmtpClient { Timeout = 20000 };
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+                // Require encryption, including when the configured option is Auto.
+                var security = ToSecureOption(_correoOpt.Security);
+                if (security == SecureSocketOptions.Auto)
+                    security = _correoOpt.SmtpPort == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
+                await smtp.ConnectAsync(_correoOpt.SmtpHost, _correoOpt.SmtpPort, security, timeout.Token);
+                smtp.AuthenticationMechanisms.Remove("XOAUTH2");
+                if (!string.IsNullOrWhiteSpace(_correoOpt.Usuario))
+                    await smtp.AuthenticateAsync(_correoOpt.Usuario, _correoOpt.Contrasena, timeout.Token);
+                sending = true;
+                await smtp.SendAsync(msg, timeout.Token);
+                accepted = true;
+                try { await smtp.DisconnectAsync(true, timeout.Token); } catch { /* SMTP already accepted. */ }
+                return "CORREO_ENVIADO";
+            }
+            catch (Exception ex)
+            {
+                // Never log the invitation URL, message body, credentials or exception detail.
+                _logger.LogWarning("Invitacion autoauditoria: SMTP {Tipo}; aceptado={Aceptado}", ex.GetType().Name, accepted);
+                return accepted ? "CORREO_ENVIADO" : sending ? "CORREO_INCIERTO" : ex is MailKit.Security.AuthenticationException ? "CORREO_AUTH" : "CORREO_CONEXION";
+            }
+        }
+
+
+        public object DiagnosticoAutoAuditoria() => new
+        {
+            habilitado = _correoOpt.Habilitado,
+            soloPruebas = _correoOpt.SoloPruebas,
+            hostConfigurado = !string.IsNullOrWhiteSpace(_correoOpt.SmtpHost),
+            remitenteConfigurado = !string.IsNullOrWhiteSpace(_correoOpt.Remitente),
+            usuarioConfigurado = !string.IsNullOrWhiteSpace(_correoOpt.Usuario),
+            contrasenaConfigurada = !string.IsNullOrWhiteSpace(_correoOpt.Contrasena),
+            puerto = _correoOpt.SmtpPort,
+            seguridad = _correoOpt.Security,
+            cantidadListaBlanca = (_correoOpt.ListaBlanca??"").Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Length,
+            logoIncrustado = typeof(ServicioNotificaciones).Assembly.GetManifestResourceInfo("NSQ.AutoAuditoria.Logo.png") != null
+        };
+
         public Task EnviarCorreoDirectoAsync(
             string para,
             string asunto,
