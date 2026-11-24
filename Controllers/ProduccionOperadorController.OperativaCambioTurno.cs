@@ -187,7 +187,7 @@ public sealed partial class ProduccionOperadorController
 
         return ConvertirResultadoCambioTurnoOperativo(
             resultado,
-            "Turno entregado. Está pendiente de recepción por el operador entrante.",
+            "Cambio de turno procesado. Consulta el estado actualizado para confirmar si quedó recibido o pendiente.",
             referenciaParejaVieja,
             referenciaParejaSegura);
     }
@@ -208,8 +208,9 @@ public sealed partial class ProduccionOperadorController
         {
             await cn.OpenAsync();
             var usuarioId = ObtenerUsuarioID();
-            if (!await UsuarioEsOperadorAsync(usuarioId, cn))
-                return StatusCode(StatusCodes.Status403Forbidden, new { ok = false, mensaje = "Solo el operador entrante puede recibir el turno." });
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn) && !puedeSupervisar)
+                return StatusCode(StatusCodes.Status403Forbidden, new { ok = false, mensaje = "No tienes permisos para recibir este turno." });
 
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0)
@@ -231,7 +232,7 @@ WHERE ct.CambioTurnoID=@CambioTurnoID
                 await using var rd = await cmd.ExecuteReaderAsync();
                 if (!await rd.ReadAsync())
                     return BadRequest(new { ok = false, mensaje = "Esta entrega ya fue atendida, cancelada o dejó de estar pendiente." });
-                if (Convert.ToInt32(rd["OperadorEntranteID"]) != personaId.Value)
+                if (!puedeSupervisar && Convert.ToInt32(rd["OperadorEntranteID"]) != personaId.Value)
                     return StatusCode(StatusCodes.Status403Forbidden, new { ok = false, mensaje = "Esta entrega de turno está asignada a otro operador." });
                 programaId = Convert.ToInt32(rd["ProgramaProduccionID"]);
             }

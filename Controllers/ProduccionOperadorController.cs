@@ -303,6 +303,7 @@ namespace ERP.NSQuell.Controllers
 
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
 
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
@@ -318,6 +319,9 @@ namespace ERP.NSQuell.Controllers
                     return NotFound();
                 }
 
+                var operadorRegistroId = puedeSupervisar
+                    ? ResolverOperadorResponsableCapturaKiosco(ejecucion)
+                    : personaId.Value;
                 await ValidarInicioTiempoExtraEjecucionAsync(ejecucion, personaId.Value, cn, tx);
 
                 var configuracion = await ObtenerConfiguracionActualOperadorAsync(ejecucion.EjecucionProduccionID, cn, tx);
@@ -341,7 +345,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     var tiempoExtraId = await InsertarSesionTiempoExtraOperadorAsync(
                         ejecucion.EjecucionProduccionID,
-                        personaId.Value,
+                        operadorRegistroId,
                         configuracion.ConfiguracionCorridaID,
                         ahora,
                         contador.Value,
@@ -363,6 +367,9 @@ namespace ERP.NSQuell.Controllers
                 if (ejecucionPareja == null)
                     throw new InvalidOperationException($"No fue posible recuperar {pareja.OFParejaTexto}.");
 
+                var operadorParejaRegistroId = puedeSupervisar
+                    ? ResolverOperadorResponsableCapturaKiosco(ejecucionPareja)
+                    : personaId.Value;
                 await ValidarInicioTiempoExtraEjecucionAsync(ejecucionPareja, personaId.Value, cn, tx);
 
                 var configuracionPareja = await ObtenerConfiguracionActualOperadorAsync(ejecucionPareja.EjecucionProduccionID, cn, tx);
@@ -387,7 +394,7 @@ namespace ERP.NSQuell.Controllers
 
                 var sesionActualId = await InsertarSesionTiempoExtraOperadorAsync(
                     ejecucion.EjecucionProduccionID,
-                    personaId.Value,
+                    operadorRegistroId,
                     configuracion.ConfiguracionCorridaID,
                     ahora,
                     contador.Value,
@@ -399,7 +406,7 @@ namespace ERP.NSQuell.Controllers
 
                 var sesionParejaId = await InsertarSesionTiempoExtraOperadorAsync(
                     ejecucionPareja.EjecucionProduccionID,
-                    personaId.Value,
+                    operadorParejaRegistroId,
                     configuracionPareja.ConfiguracionCorridaID,
                     ahora,
                     contador.Value,
@@ -833,6 +840,7 @@ ORDER BY te.TiempoExtraID DESC;";
 
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
 
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
@@ -847,6 +855,10 @@ ORDER BY te.TiempoExtraID DESC;";
                     await tx.RollbackAsync();
                     return NotFound();
                 }
+
+                var operadorRegistroId = puedeSupervisar
+                    ? ResolverOperadorResponsableCapturaKiosco(ejecucion)
+                    : personaId.Value;
 
                 if (!await PersonaAsignadaAEjecucionAsync(vm.EjecucionProduccionID, personaId.Value, cn, tx))
                 {
@@ -995,11 +1007,11 @@ ORDER BY te.TiempoExtraID DESC;";
                     vm.HoraInicio = horaInicioReal.ToString(@"hh\:mm");
                     vm.HoraFin = horaFinReal.ToString(@"hh\:mm");
 
-                    var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
+                    var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, operadorRegistroId, usuarioId, calculo, cn, tx);
                     await GuardarDefectosScrapAsync(registroHoraId, vm.DefectosScrap, usuarioId, cn, tx);
                     await InsertarSegmentosRegistroHoraAsync(registroHoraId, ejecucion.EjecucionProduccionID, calculo, usuarioId, cn, tx);
-                    await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
-                    await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucion.EjecucionProduccionID, registroHoraId, vm.CantidadOK, calculo.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
+                    await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, operadorRegistroId, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
+                    await RegistrarBonusProduccionHoraAsync(operadorRegistroId, ejecucion.EjecucionProduccionID, registroHoraId, vm.CantidadOK, calculo.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
                     await VincularRegistroHoraConCalidadAsync(ejecucion, vm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
                     await RecalcularTotalesEjecucionAsync(vm.EjecucionProduccionID, usuarioId, cn, tx);
                     await tx.CommitAsync();
@@ -1142,11 +1154,11 @@ ORDER BY te.TiempoExtraID DESC;";
                 vm.HoraInicio = horaInicioReal.ToString(@"hh\:mm");
                 vm.HoraFin = horaFinReal.ToString(@"hh\:mm");
 
-                var registroHoraActualId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
+                var registroHoraActualId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, operadorRegistroId, usuarioId, calculo, cn, tx);
                 await GuardarDefectosScrapAsync(registroHoraActualId, vm.DefectosScrap, usuarioId, cn, tx);
                 await InsertarSegmentosRegistroHoraAsync(registroHoraActualId, ejecucion.EjecucionProduccionID, calculo, usuarioId, cn, tx);
-                await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraActualId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
-                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucion.EjecucionProduccionID, registroHoraActualId, cantidadOKActual, calculo.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
+                await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraActualId, operadorRegistroId, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
+                await RegistrarBonusProduccionHoraAsync(operadorRegistroId, ejecucion.EjecucionProduccionID, registroHoraActualId, cantidadOKActual, calculo.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
                 await VincularRegistroHoraConCalidadAsync(ejecucion, vm, horaInicioReal, horaFinReal, registroHoraActualId, usuarioId, cn, tx);
 
                 var registroParejaVm = new ProduccionRegistroHoraPostVm
@@ -1169,11 +1181,15 @@ ORDER BY te.TiempoExtraID DESC;";
                     DefectosScrap = vm.DefectosScrapPareja
                 };
 
-                var registroHoraParejaId = await InsertarRegistroHoraAsync(ejecucionPareja, registroParejaVm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculoPareja, cn, tx);
+                var operadorParejaRegistroId = puedeSupervisar
+                    ? ResolverOperadorResponsableCapturaKiosco(ejecucionPareja)
+                    : personaId.Value;
+
+                var registroHoraParejaId = await InsertarRegistroHoraAsync(ejecucionPareja, registroParejaVm, horaInicioReal, horaFinReal, operadorParejaRegistroId, usuarioId, calculoPareja, cn, tx);
                 await GuardarDefectosScrapAsync(registroHoraParejaId, registroParejaVm.DefectosScrap, usuarioId, cn, tx);
                 await InsertarSegmentosRegistroHoraAsync(registroHoraParejaId, ejecucionPareja.EjecucionProduccionID, calculoPareja, usuarioId, cn, tx);
-                await RegistrarLecturaContadorHoraAsync(ejecucionPareja, registroHoraParejaId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculoPareja, cn, tx);
-                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucionPareja.EjecucionProduccionID, registroHoraParejaId, cantidadOKPareja, calculoPareja.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
+                await RegistrarLecturaContadorHoraAsync(ejecucionPareja, registroHoraParejaId, operadorParejaRegistroId, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculoPareja, cn, tx);
+                await RegistrarBonusProduccionHoraAsync(operadorParejaRegistroId, ejecucionPareja.EjecucionProduccionID, registroHoraParejaId, cantidadOKPareja, calculoPareja.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
                 await VincularRegistroHoraConCalidadAsync(ejecucionPareja, registroParejaVm, horaInicioReal, horaFinReal, registroHoraParejaId, usuarioId, cn, tx);
 
                 await RecalcularTotalesEjecucionAsync(ejecucion.EjecucionProduccionID, usuarioId, cn, tx);
@@ -4011,6 +4027,16 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
             };
         }
 
+        // NSQ_KIOSCO_OPERADOR_ATRIBUCION_RECEPCION_V1_0
+        // Cuando captura supervision, el operador productivo es el de la OF;
+        // el usuario que pulsó Guardar sigue en UsuarioCreacionID / bitacora.
+        private static int ResolverOperadorResponsableCapturaKiosco(ProduccionEjecucionVm ejecucion)
+        {
+            if (!ejecucion.OperadorID.HasValue || ejecucion.OperadorID.Value <= 0)
+                throw new InvalidOperationException("La OF no tiene un operador principal asignado. Corrige la asignación antes de capturar como auxiliar o encargado.");
+            return ejecucion.OperadorID.Value;
+        }
+
         private async Task<int> InsertarRegistroHoraAsync(ProduccionEjecucionVm ejecucion, ProduccionRegistroHoraPostVm vm, TimeSpan horaInicio, TimeSpan horaFin, int operadorPersonaId, int usuarioId, CalculoProduccionContadorHora calculo, SqlConnection cn, SqlTransaction tx)
         {
             if (vm.EsTiempoExtra && (!vm.TiempoExtraID.HasValue || vm.TiempoExtraID.Value < 0 || !vm.NumeroCorteTiempoExtra.HasValue || vm.NumeroCorteTiempoExtra.Value <= 0))
@@ -5654,7 +5680,40 @@ ORDER BY EnEscala DESC,MinutosParaInicio,Nombre;";
                     await ActualizarSugerenciaCambioTurnoOperadorAsync(resumenPareja, vm.OperadorEntranteID, origen, usuarioId, cn, tx);
                 }
 
+                if (puedeSupervisar)
+                {
+                    // Recepción administrativa inmediata, con el mismo usuario
+                    // trazado como quien entrega y quien confirma. No se suplanta
+                    // al operador entrante: su PersonaID queda en la ejecución.
+                    var nombreEntrante = await ObtenerNombrePersonaCambioTurnoAsync(vm.OperadorEntranteID, cn, tx);
+                    if (string.IsNullOrWhiteSpace(nombreEntrante))
+                        throw new InvalidOperationException("El operador entrante no está activo.");
+
+                    var cambioActual = await ObtenerCambioTurnoOperadorAsync(cambioActualId, cn, tx);
+                    if (cambioActual == null)
+                        throw new InvalidOperationException("No se pudo confirmar la entrega del turno.");
+                    await AplicarRecepcionCambioTurnoOperadorAsync(
+                        cambioActual, nombreEntrante, "Recepción administrativa por auxiliar/encargado autorizado.", usuarioId, cn, tx);
+
+                    if (cambioParejaId.HasValue)
+                    {
+                        var cambioPareja = await ObtenerCambioTurnoOperadorAsync(cambioParejaId.Value, cn, tx);
+                        if (cambioPareja == null)
+                            throw new InvalidOperationException("No se pudo confirmar la entrega LH/RH conjunta.");
+                        await AplicarRecepcionCambioTurnoOperadorAsync(
+                            cambioPareja, nombreEntrante, "Recepción administrativa LH/RH por supervisor autorizado.", usuarioId, cn, tx);
+                    }
+                }
+
                 await tx.CommitAsync();
+
+                if (puedeSupervisar)
+                {
+                    TempData["Success"] = resumenPareja == null
+                        ? $"Cambio aplicado y máquina recibida por supervisión a nombre de {candidatoActual.Nombre}."
+                        : $"Cambio LH/RH aplicado a nombre de {candidatoActual.Nombre}; ambas OF quedaron recibidas.";
+                    return RedirectToAction(nameof(Index));
+                }
 
                 TempData["Success"] = resumenPareja == null
                     ? $"Turno enviado a {candidatoActual.Nombre}. Está pendiente de confirmación."
@@ -6536,6 +6595,7 @@ AS BIT);";
             await cn.OpenAsync();
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return StatusCode(StatusCodes.Status403Forbidden);
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue) return Unauthorized();
             const string sql = @"
@@ -6571,13 +6631,15 @@ OUTER APPLY
     FROM dbo.Persona p
     WHERE p.PersonaID=ct.OperadorEntranteID
 ) ent
-WHERE ct.OperadorEntranteID=@PersonaID
+WHERE (@PuedeSupervisar=1 OR ct.OperadorEntranteID=@PersonaID)
+  AND e.Activo=1
   AND ct.EstadoCambioTurno=N'PENDIENTE_RECEPCION'
   AND ct.Activo=1
 ORDER BY ct.FechaEntrega;";
             var lista = new List<ProduccionCambioTurnoPendienteVm>();
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId.Value;
+            cmd.Parameters.Add("@PuedeSupervisar", SqlDbType.Bit).Value = puedeSupervisar;
             await using var rd = await cmd.ExecuteReaderAsync();
             while (await rd.ReadAsync())
             {
@@ -6629,6 +6691,7 @@ ORDER BY ct.FechaEntrega;";
 
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
 
             var personaEntranteId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaEntranteId.HasValue || personaEntranteId.Value <= 0) return Unauthorized();
@@ -6645,14 +6708,14 @@ ORDER BY ct.FechaEntrega;";
                     return RedirectToAction(nameof(Index));
                 }
 
-                if (cambio.OperadorEntranteID != personaEntranteId.Value)
+                if (!puedeSupervisar && cambio.OperadorEntranteID != personaEntranteId.Value)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Esta entrega de turno está asignada a otro operador.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                var nombreEntrante = await ObtenerNombrePersonaCambioTurnoAsync(personaEntranteId.Value, cn, tx);
+                var nombreEntrante = await ObtenerNombrePersonaCambioTurnoAsync(cambio.OperadorEntranteID, cn, tx);
                 if (string.IsNullOrWhiteSpace(nombreEntrante))
                     throw new InvalidOperationException("El operador entrante ya no se encuentra activo.");
 
@@ -6674,6 +6737,14 @@ ORDER BY ct.FechaEntrega;";
                     await AplicarRecepcionCambioTurnoOperadorAsync(cambioPareja, nombreEntrante, vm.ObservacionesRecepcion, usuarioId, cn, tx);
 
                 await tx.CommitAsync();
+
+                if (puedeSupervisar)
+                {
+                    TempData["Success"] = cambioPareja == null
+                        ? $"Recepción administrativa confirmada para {nombreEntrante}. La OF ya refleja al operador asignado."
+                        : $"Recepción administrativa LH/RH confirmada para {nombreEntrante} en las dos OF.";
+                    return RedirectToAction(nameof(Index));
+                }
 
                 TempData["Success"] = cambioPareja == null
                     ? "Turno recibido correctamente. La producción quedó bajo tu responsabilidad."
@@ -10667,6 +10738,7 @@ WHERE TiempoExtraID=@TiempoExtraID
             await cn.OpenAsync();
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -10684,6 +10756,9 @@ WHERE TiempoExtraID=@TiempoExtraID
                     throw new InvalidOperationException("La ejecución ya no está asignada al operador conectado.");
                 var ejecucion = await ObtenerEjecucionOperadorAsync(ejecucionProduccionId, cn, tx);
                 if (ejecucion == null) throw new InvalidOperationException("No se encontró la ejecución.");
+                var operadorRegistroId = puedeSupervisar
+                    ? ResolverOperadorResponsableCapturaKiosco(ejecucion)
+                    : personaId.Value;
                 if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
                     throw new InvalidOperationException("La corrida debe encontrarse en Producción.");
                 if (ejecucion.FechaLiberacionMaquina.HasValue)
@@ -10713,7 +10788,7 @@ WHERE TiempoExtraID=@TiempoExtraID
                     if (calculo.PiezasCalculadas == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
                         throw new InvalidOperationException("No se detectó producción durante este periodo. Indica en observaciones qué ocurrió.");
                     var numeroCorte = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(sesion.TiempoExtraID, cn, tx);
-                    var resultado = await GuardarCorteTiempoExtraLadoAsync(ejecucion, sesion, vm.ContadorMaquinaActual.Value, vm.CantidadScrap, vm.Observaciones, vm.DefectosScrap, numeroCorte, finalizar, fechaInicioCorte, fechaFinCorte, personaId.Value, usuarioId, calculo, cn, tx);
+                    var resultado = await GuardarCorteTiempoExtraLadoAsync(ejecucion, sesion, vm.ContadorMaquinaActual.Value, vm.CantidadScrap, vm.Observaciones, vm.DefectosScrap, numeroCorte, finalizar, fechaInicioCorte, fechaFinCorte, operadorRegistroId, usuarioId, calculo, cn, tx);
                     await RecalcularTotalesEjecucionAsync(ejecucionProduccionId, usuarioId, cn, tx);
                     await tx.CommitAsync();
                     TempData["Success"] = finalizar
@@ -10725,6 +10800,9 @@ WHERE TiempoExtraID=@TiempoExtraID
                 var ejecucionPareja = await ObtenerEjecucionOperadorAsync(pareja.EjecucionParejaID!.Value, cn, tx);
                 if (ejecucionPareja == null)
                     throw new InvalidOperationException($"No fue posible recuperar {pareja.OFParejaTexto}.");
+                var operadorParejaRegistroId = puedeSupervisar
+                    ? ResolverOperadorResponsableCapturaKiosco(ejecucionPareja)
+                    : personaId.Value;
                 if (!await PersonaAsignadaAEjecucionAsync(ejecucionPareja.EjecucionProduccionID, personaId.Value, cn, tx))
                     throw new InvalidOperationException($"El operador conectado no está asignado también a {pareja.OFParejaTexto}.");
                 if (ejecucionPareja.EstatusID != ProduccionEstatus.EnProduccion)
@@ -10751,9 +10829,9 @@ WHERE TiempoExtraID=@TiempoExtraID
                 var numeroCortePareja = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(sesionPareja.TiempoExtraID, cn, tx);
                 if (numeroCorteActual != numeroCortePareja)
                     throw new InvalidOperationException($"Los cortes LH/RH están desincronizados ({numeroCorteActual} y {numeroCortePareja}).");
-                var resultadoActual = await GuardarCorteTiempoExtraLadoAsync(ejecucion, sesion, vm.ContadorMaquinaActual.Value, vm.CantidadScrap, vm.Observaciones, vm.DefectosScrap, numeroCorteActual, finalizar, fechaInicioCorte, fechaFinCorte, personaId.Value, usuarioId, calculo, cn, tx);
+                var resultadoActual = await GuardarCorteTiempoExtraLadoAsync(ejecucion, sesion, vm.ContadorMaquinaActual.Value, vm.CantidadScrap, vm.Observaciones, vm.DefectosScrap, numeroCorteActual, finalizar, fechaInicioCorte, fechaFinCorte, operadorRegistroId, usuarioId, calculo, cn, tx);
                 var observacionPareja = string.IsNullOrWhiteSpace(vm.ObservacionesPareja) ? vm.Observaciones : vm.ObservacionesPareja;
-                var resultadoPareja = await GuardarCorteTiempoExtraLadoAsync(ejecucionPareja, sesionPareja, vm.ContadorMaquinaActual.Value, vm.CantidadScrapPareja, observacionPareja, vm.DefectosScrapPareja, numeroCortePareja, finalizar, fechaInicioCorte, fechaFinCorte, personaId.Value, usuarioId, calculoPareja, cn, tx);
+                var resultadoPareja = await GuardarCorteTiempoExtraLadoAsync(ejecucionPareja, sesionPareja, vm.ContadorMaquinaActual.Value, vm.CantidadScrapPareja, observacionPareja, vm.DefectosScrapPareja, numeroCortePareja, finalizar, fechaInicioCorte, fechaFinCorte, operadorParejaRegistroId, usuarioId, calculoPareja, cn, tx);
                 await RecalcularTotalesEjecucionAsync(ejecucion.EjecucionProduccionID, usuarioId, cn, tx);
                 await RecalcularTotalesEjecucionAsync(ejecucionPareja.EjecucionProduccionID, usuarioId, cn, tx);
                 await tx.CommitAsync();

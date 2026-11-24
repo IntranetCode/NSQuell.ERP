@@ -8,6 +8,7 @@
     var ladoActual = !string.IsNullOrWhiteSpace(Model.LadoLhRh) ? Model.LadoLhRh! : "OF A";
     var ladoPareja = !string.IsNullOrWhiteSpace(Model.LadoParejaLhRh) ? Model.LadoParejaLhRh! : "OF B";
     var capturaLhRhBloqueada = esLhRh && ViewBag.CapturaLhRhBloqueada == true;
+    var recepcionAdministrativa = ViewBag.ModoSupervisorKiosco == true;
     var errorLhRh = ViewBag.ErrorLhRh as string;
 
     var planeada = Model.CantidadPlaneada ?? 0;
@@ -2279,7 +2280,7 @@
         <section class="turn-toolbar">
             <div>
                 <div class="turn-title"><i class="fa-solid fa-people-arrows-left-right me-2"></i>Entrega de turno · Pareja LH/RH</div>
-                <div class="turn-subtitle">El mismo operador entrante recibirá @ladoActual y @ladoPareja. El cambio se aplicará a las dos OF dentro de una sola transacción cuando el operador entrante confirme la recepción.</div>
+                <div class="turn-subtitle">@(recepcionAdministrativa ? "El cambio se aplica de inmediato en ambas OF cuando lo realiza supervisión autorizada." : "El operador entrante recibirá ambas OF y deberá confirmar la recepción para aplicar el cambio.")</div>
             </div>
             @if (ambasEnProduccion && !tieneParoFisico && !capturaLhRhBloqueada)
             {
@@ -2317,7 +2318,7 @@
                 <i class="fa-solid fa-arrow-right-arrow-left me-2"></i>Entrega de turno
             </div>
             <div class="turn-subtitle">
-                Entrega la producción al siguiente operador. El cambio será efectivo únicamente cuando el operador entrante confirme la recepción.
+                @(recepcionAdministrativa ? "Supervisión asigna al nuevo operador y confirma la recepción en una sola operación." : "Entrega la producción al siguiente operador. El cambio será efectivo cuando el operador entrante confirme la recepción.")
             </div>
         </div>
         @if (Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
@@ -3264,7 +3265,7 @@
                             id="btnConfirmarCambioTurno"
                             disabled>
                         <i class="fa-solid fa-paper-plane me-1"></i>
-                        Enviar turno para recepción
+                         @(recepcionAdministrativa ? "Confirmar cambio y recepción" : "Enviar turno para recepción")
                     </button>
                 </div>
             </form>

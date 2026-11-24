@@ -74,8 +74,7 @@ public sealed class ProduccionCambioTurnoOperativoVm
 
     public bool PuedeRecibir =>
         !SoloLecturaSolicitado &&
-        UsuarioEsOperador &&
-        UsuarioEsEntrantePendiente &&
+        (UsuarioPuedeSupervisarCambioTurno || (UsuarioEsOperador && UsuarioEsEntrantePendiente)) &&
         CambioPendiente != null;
 
     public string EstatusTexto => ProduccionEstatus.Nombre(EstatusID);

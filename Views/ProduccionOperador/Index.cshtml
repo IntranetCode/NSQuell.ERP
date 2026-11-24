@@ -629,7 +629,7 @@
         </div>
     }
     <section class="turn-reception d-none" id="turnosPendientesSection">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2"><div><div class="turn-reception-title"><i class="fa-solid fa-arrow-right-arrow-left me-2"></i>Tienes un turno pendiente por recibir</div><div class="turn-reception-sub">Revisa exactamente lo que recibes antes de aceptar. La responsabilidad cambia únicamente cuando confirmas la recepción.</div></div><span class="badge bg-primary" id="turnosPendientesCount">0</span></div>
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2"><div><div class="turn-reception-title"><i class="fa-solid fa-arrow-right-arrow-left me-2"></i>@(ViewBag.ModoSupervisorKiosco == true ? "Cambios pendientes de recepción" : "Tienes un turno pendiente por recibir")</div><div class="turn-reception-sub">@(ViewBag.ModoSupervisorKiosco == true ? "Como auxiliar o encargado puedes confirmar cambios previamente pendientes; se registrará tu usuario como receptor administrativo." : "Revisa exactamente lo que recibes antes de aceptar. La responsabilidad cambia únicamente cuando confirmas la recepción.")</div></div><span class="badge bg-primary" id="turnosPendientesCount">0</span></div>
         <div class="turn-reception-list" id="turnosPendientesLista"></div>
     </section>
 
@@ -810,7 +810,7 @@
             <form method="post" action="@Url.Action("RecibirTurno","ProduccionOperador")" id="formRecibirTurno">
                 @Html.AntiForgeryToken()<input type="hidden" name="CambioTurnoID" id="recibirCambioTurnoID" />
                 <div class="modal-body p-4">
-                    <div class="alert alert-info rounded-4 fw-bold"><i class="fa-solid fa-circle-info me-1"></i>Al aceptar, esta máquina quedará bajo tu responsabilidad como único operador asignado.</div>
+                    <div class="alert alert-info rounded-4 fw-bold"><i class="fa-solid fa-circle-info me-1"></i>@(ViewBag.ModoSupervisorKiosco == true ? "Se asignará la máquina al operador entrante indicado. Tú quedarás registrado como usuario que autoriza la recepción." : "Al aceptar, esta máquina quedará bajo tu responsabilidad como único operador asignado.")</div>
                     <div class="turn-detail-grid">
                         <div class="turn-detail-card"><div class="k">Recibes de</div><div class="v" id="recibirSaliente">-</div></div>
                         <div class="turn-detail-card"><div class="k">Máquina</div><div class="v" id="recibirMaquina">-</div></div>
