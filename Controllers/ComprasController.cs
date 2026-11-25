@@ -11,6 +11,7 @@ using System.Text;
 
 namespace ERP.NSQuell.Controllers
 {
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public partial class ComprasController : Controller
     {
         private readonly IConfiguration _configuration;

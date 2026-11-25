@@ -580,7 +580,8 @@ WHERE u.UsuarioID IN ({string.Join(",", paramNames)})
             if (avisoInterno)
             {
                 if (!string.Equals(para, "compras.gq@nsquell.com.mx", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(para, "sgc.gq@nsquell.com.mx", StringComparison.OrdinalIgnoreCase))
+                    && !string.Equals(para, "sgc.gq@nsquell.com.mx", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(para, "sistemas.gq@nsquell.com.mx", StringComparison.OrdinalIgnoreCase))
                     return "CORREO_BLOQUEADO";
             }
             else if (!produccion && (!allowed || !PuedeEnviarA(para))) return "CORREO_BLOQUEADO";
